@@ -15,13 +15,14 @@ func main() {
 
 	// Init handlers
 	accountHandler := NewAccountHandler(db)
-
 	setHandler := NewSetHandler(db, accountHandler)
+	cardHandler := NewCardHandler(db)
 
 	mux := http.NewServeMux()
 
 	mux.Handle("/accounts", accountHandler)
 	mux.Handle("/sets", setHandler)
+	mux.Handle("/cards", cardHandler)
 
 	http.ListenAndServe(":8080", mux)
 }

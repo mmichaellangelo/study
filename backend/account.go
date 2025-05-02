@@ -321,7 +321,7 @@ func (h *AccountHandler) DeleteAccount(id int) error {
 	}
 	// Delete account
 	_, err = h.db.Exec(context.Background(),
-		`DELETE * FROM accounts
+		`DELETE FROM accounts
 		 WHERE id=$1`, id)
 	if err != nil {
 		return fmt.Errorf("error deleting account: %w", err)

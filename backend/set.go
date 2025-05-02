@@ -156,3 +156,44 @@ func (h *SetHandler) GetSetsByAccountID(account_id int) (*[]Set, error) {
 	}
 	return &sets, nil
 }
+
+////////////
+// UPDATE
+
+func (h *SetHandler) UpdateName(set_id int, name string) error {
+	_, err := h.db.Exec(context.Background(),
+		`UPDATE sets SET name=$1 WHERE id=$2`, name, set_id)
+	if err != nil {
+		return fmt.Errorf("error updating name: %w", err)
+	}
+	return nil
+}
+
+func (h *SetHandler) UpdateDescription(set_id int, description string) error {
+	_, err := h.db.Exec(context.Background(),
+		`UPDATE sets SET description=$1 WHERE id=$2`, description, set_id)
+	if err != nil {
+		return fmt.Errorf("error updating description: %w", err)
+	}
+	return nil
+}
+
+////////////
+// DELETE
+
+func (h *SetHandler) DeleteSet(set_id int) error {
+	// Check exists
+	set, err := h.GetSetByID(set_id)
+	if err != nil {
+		return fmt.Errorf("error querying set: %w", err)
+	}
+	if set == nil {
+		return fmt.Errorf("set does not exist")
+	}
+	_, err = h.db.Exec(context.Background(),
+		`DELETE FROM sets WHERE id=$1`, set_id)
+	if err != nil {
+		return fmt.Errorf("error deleting set: %w", err)
+	}
+	return nil
+}
