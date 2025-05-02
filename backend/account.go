@@ -14,20 +14,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var (
-	AccountRE       = regexp.MustCompile(`^\/accounts\/?$`)
-	AccountREWithID = regexp.MustCompile(`^\/accounts\/(\d+)$`)
-)
+///////////
+// TYPES
 
 type Account struct {
 	ID       int    `json:"id"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
-	Password string `json:"password"`
 	Picture  string `json:"picture"`
 	Bio      string `json:"bio"`
 	Created  time.Time
 }
+
+// type AuthDetails struct {
+// 	Email    string `json:"email"`
+// 	Password string `json:"password"`
+// }
 
 type AccountHandler struct {
 	db *pgxpool.Pool
@@ -37,9 +39,16 @@ func NewAccountHandler(db *pgxpool.Pool) *AccountHandler {
 	return &AccountHandler{db: db}
 }
 
+////////////
+// ROUTES
+
+var (
+	AccountRE       = regexp.MustCompile(`^\/accounts\/?$`)
+	AccountREWithID = regexp.MustCompile(`^\/accounts\/(\d+)$`)
+)
+
 func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
-
 	switch {
 	// Get all accounts
 	case AccountRE.MatchString(url) && r.Method == http.MethodGet:

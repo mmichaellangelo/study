@@ -16,9 +16,12 @@ func main() {
 	// Init handlers
 	accountHandler := NewAccountHandler(db)
 
+	setHandler := NewSetHandler(db, accountHandler)
+
 	mux := http.NewServeMux()
 
 	mux.Handle("/accounts", accountHandler)
+	mux.Handle("/sets", setHandler)
 
 	http.ListenAndServe(":8080", mux)
 }
