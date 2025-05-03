@@ -18,12 +18,12 @@ import (
 // TYPES
 
 type Account struct {
-	ID       int    `json:"id"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Picture  string `json:"picture"`
-	Bio      string `json:"bio"`
-	Created  time.Time
+	ID       int       `json:"id"`
+	Email    string    `json:"email"`
+	Username string    `json:"username"`
+	Picture  string    `json:"picture"`
+	Bio      string    `json:"bio"`
+	Created  time.Time `json:"created"`
 }
 
 type AccountHandler struct {
@@ -55,7 +55,7 @@ func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
 		username := r.FormValue("username")
 		password := r.FormValue("password")
-		err = h.CreateAccount(email, username, password)
+		_, err = h.CreateAccount(email, username, password)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error creating account: %v", err), http.StatusBadRequest)
 			return
@@ -102,47 +102,56 @@ func getAccountIDFromURL(url string) (int, error) {
 ////////////
 // CREATE
 
-func (h *AccountHandler) CreateAccount(email string, username string, password string) error {
+func (h *AccountHandler) CreateAccount(email string, username string, password string) (userID int, err error) {
 	// Check that email, username, and password are not blank
 	if strings.TrimSpace(email) == "" ||
 		strings.TrimSpace(username) == "" ||
 		strings.TrimSpace(password) == "" {
-		return fmt.Errorf("empty email, username, and/or password")
+		return -1, fmt.Errorf("empty email, username, and/or password")
 	}
 	// Hash password
 	hashed, err := HashPassword(password)
 	if err != nil {
-		return fmt.Errorf("error hashing password: %w", err)
+		return -1, fmt.Errorf("error hashing password: %w", err)
 	}
 	// Validate email address
 	_, err = mail.ParseAddress(email)
 	if err != nil {
-		return fmt.Errorf("invalid email")
+		return -1, fmt.Errorf("invalid email")
 	}
 	// Check that email is unique
 	acc, err := h.GetAccountByEmail(email)
 	if err != nil {
-		return fmt.Errorf("error checking if account is unique: %w", err)
+		return -1, fmt.Errorf("error checking if account is unique: %w", err)
 	}
 	if acc != nil {
-		return fmt.Errorf("account with given email already exists")
+		return -1, fmt.Errorf("account with given email already exists")
 	}
 	// Check that username is unique
 	acc, err = h.GetAccountByUsername(email)
 	if err != nil {
-		return fmt.Errorf("error checking if account is unique: %w", err)
+		return -1, fmt.Errorf("error checking if account is unique: %w", err)
 	}
 	if acc != nil {
-		return fmt.Errorf("account with given username already exists")
+		return -1, fmt.Errorf("account with given username already exists")
 	}
 	// Add account to database
-	_, err = h.db.Query(context.Background(),
+	rows, err := h.db.Query(context.Background(),
 		`INSERT INTO accounts username, email, password
-		 VALUES($1, $2, $3)`, email, username, hashed)
+		 VALUES($1, $2, $3)
+		 RETURNING id`, email, username, hashed)
 	if err != nil {
-		return fmt.Errorf("error inserting account into database: %w", err)
+		return -1, fmt.Errorf("error inserting account into database: %w", err)
 	}
-	return nil
+	if !rows.Next() {
+		return -1, fmt.Errorf("error inserting account into database: %w", err)
+	}
+	var accID int
+	err = rows.Scan(&accID)
+	if err != nil {
+		return -1, fmt.Errorf("error scanning rows: %w", err)
+	}
+	return accID, nil
 }
 
 //////////

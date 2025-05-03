@@ -4,9 +4,21 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Get environment
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("error loading .env file")
+	}
+
+	ACCESS_SECRET := os.Getenv("ACCESS_SECRET")
+	REFRESH_SECRET := os.Getenv("REFRESH_SECRET")
+
 	// Init db connection
 	db, err := InitDBPool(context.Background())
 	if err != nil {
@@ -24,7 +36,7 @@ func main() {
 	mux.Handle("/sets", setHandler)
 	mux.Handle("/cards", cardHandler)
 
-	authMux := NewAuthMiddleware(mux, db)
+	authMux := NewAuthMiddleware(mux, db, accountHandler, ACCESS_SECRET, REFRESH_SECRET)
 
 	http.ListenAndServe(":8080", authMux)
 }
