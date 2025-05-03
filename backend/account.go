@@ -26,11 +26,6 @@ type Account struct {
 	Created  time.Time
 }
 
-// type AuthDetails struct {
-// 	Email    string `json:"email"`
-// 	Password string `json:"password"`
-// }
-
 type AccountHandler struct {
 	db *pgxpool.Pool
 }
@@ -50,10 +45,25 @@ var (
 func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 	switch {
-	// Get all accounts
-	case AccountRE.MatchString(url) && r.Method == http.MethodGet:
-		break
-	// Get account
+	// CREATE ACCOUNT
+	case AccountRE.MatchString(url) && r.Method == http.MethodPost:
+		err := r.ParseForm()
+		if err != nil {
+			http.Error(w, "error parsing form", http.StatusInternalServerError)
+			return
+		}
+		email := r.FormValue("email")
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+		err = h.CreateAccount(email, username, password)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error creating account: %v", err), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		return
+
+	// GET ACCOUNT
 	case AccountREWithID.MatchString(url) && r.Method == http.MethodGet:
 		id, err := getAccountIDFromURL(url)
 		if err != nil {

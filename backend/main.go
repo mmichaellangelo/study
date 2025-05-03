@@ -24,5 +24,7 @@ func main() {
 	mux.Handle("/sets", setHandler)
 	mux.Handle("/cards", cardHandler)
 
-	http.ListenAndServe(":8080", mux)
+	authMux := NewAuthMiddleware(mux, db)
+
+	http.ListenAndServe(":8080", authMux)
 }

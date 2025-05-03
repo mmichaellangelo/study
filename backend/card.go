@@ -23,6 +23,10 @@ type CardHandler struct {
 	db *pgxpool.Pool
 }
 
+func NewCardHandler(db *pgxpool.Pool) *CardHandler {
+	return &CardHandler{db: db}
+}
+
 ////////////
 // ROUTES
 
@@ -32,8 +36,11 @@ var (
 )
 
 func (h *CardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Path
+
 }
+
+////////////
+// CREATE
 
 func (h *CardHandler) CreateCard(stack_id int, front string, back string) error {
 	if strings.TrimSpace(front) == "" && strings.TrimSpace(back) == "" {
@@ -42,4 +49,8 @@ func (h *CardHandler) CreateCard(stack_id int, front string, back string) error 
 	_, err := h.db.Exec(context.Background(),
 		`INSERT INTO cards stack_id, front, back
 		 VALUES($1, $2, $3)`, stack_id, front, back)
+	if err != nil {
+		return fmt.Errorf("error creating card: %w", err)
+	}
+	return nil
 }
