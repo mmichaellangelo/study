@@ -8,7 +8,7 @@ import (
 )
 
 func InitDBPool(ctx context.Context) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, "postgres://mike:password@db:5432/db")
+	pool, err := pgxpool.New(ctx, "postgres://mike:password@localhost:5432/db")
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %v", err)
 	}

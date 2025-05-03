@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -38,5 +39,9 @@ func main() {
 
 	authMux := NewAuthMiddleware(mux, db, accountHandler, ACCESS_SECRET, REFRESH_SECRET)
 
-	http.ListenAndServe(":8080", authMux)
+	fmt.Println("Starting server on port 8080")
+	err = http.ListenAndServe(":8080", authMux)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

@@ -137,7 +137,7 @@ func (h *AccountHandler) CreateAccount(email string, username string, password s
 	}
 	// Add account to database
 	rows, err := h.db.Query(context.Background(),
-		`INSERT INTO accounts username, email, password
+		`INSERT INTO accounts (username, email, password)
 		 VALUES($1, $2, $3)
 		 RETURNING id`, email, username, hashed)
 	if err != nil {
