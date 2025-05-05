@@ -19,6 +19,7 @@ import (
 var accessTokenExpiration = (time.Minute * 5)
 var refreshTokenExpiration = (time.Hour * 24)
 
+// Middleware to handle user auth
 type AuthMiddleware struct {
 	next           http.Handler
 	db             *pgxpool.Pool
@@ -27,16 +28,20 @@ type AuthMiddleware struct {
 	refreshSecret  string
 }
 
+// Claims to be included in restricted route context
 type Claims struct {
-	UserID int `json:"userid"`
+	UserID   int    `json:"userid"`
+	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
+// Details needed for user auth
 type AuthDetails struct {
 	UserID   int
 	Password string
 }
 
+// Creates a new Auth Middleware
 func NewAuthMiddleware(handlerToWrap http.Handler,
 	db *pgxpool.Pool, accountHandler *AccountHandler,
 	accessSecret string, refreshSecret string) *AuthMiddleware {
@@ -59,28 +64,38 @@ var (
 	IdentityRouteRE  = regexp.MustCompile(`^\/me\/?$`)
 )
 
+// HTTP Routes
 func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
+
+	// Enable CORS for development
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+	// Handle OPTIONS preflight requests
+	if r.Method == http.MethodOptions {
+		fmt.Println("Handled OPTIONS request")
+		w.WriteHeader(http.StatusOK) // Just need to return OK status with CORS headers
+		return
+	}
 
 	switch {
 	// IDENTITY ROUTE
 	case IdentityRouteRE.MatchString(url) && r.Method == http.MethodGet:
-		access := h.RefreshAccessIfNeeded(w, r)
-		_, err := jwt.Parse(access.Value, func(t *jwt.Token) (interface{}, error) {
-			return h.accessSecret, nil
-		})
-		if err != nil {
-			http.Error(w, "error parsing access cookie", http.StatusUnauthorized)
+		fmt.Println("IDENTITY")
+		claims := h.RefreshAccess(w, r)
+		if claims == nil {
+			http.Error(w, "null claims", http.StatusUnauthorized)
+			return
 		}
-		claims, err := h.GetClaimsFromToken(access.Value)
-		userID := claims.UserID
-		data, err := json.Marshal(map[string]int{
-			"userID": userID,
-		})
+		data, err := json.Marshal(claims)
 		if err != nil {
 			http.Error(w, "error marshalling json", http.StatusInternalServerError)
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
+		return
+
 	// REGISTER ROUTE
 	case RegisterPathRE.MatchString(url) && r.Method == http.MethodPost:
 		err := r.ParseForm()
@@ -135,7 +150,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// RESTRICTED ROUTE
 	case RestrictedPathRE.MatchString(url):
-		h.RefreshAccessIfNeeded(w, r)
+		h.RefreshAccess(w, r)
 		accessCookie, err := r.Cookie("access")
 		if err != nil {
 			if err == http.ErrNoCookie {
@@ -165,6 +180,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// Sets both refresh and access cookies
 func (h *AuthMiddleware) SetAuthCookies(w http.ResponseWriter, r *http.Request, userID int) {
 	accessCookie, errGenAccess := h.GenerateAccessCookie(userID)
 	refreshCookie, errGenRefresh := h.GenerateRefreshCookie(userID)
@@ -177,6 +193,7 @@ func (h *AuthMiddleware) SetAuthCookies(w http.ResponseWriter, r *http.Request, 
 	http.SetCookie(w, refreshCookie)
 }
 
+// Validates login credentials.
 func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (userID int, err error) {
 	if strings.TrimSpace(emailOrUsername) == "" || strings.TrimSpace(password) == "" {
 		return -1, fmt.Errorf("empty username or password")
@@ -188,9 +205,11 @@ func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (
 	// Get password hash from db
 	if errParseAddress != nil {
 		// Username
+		fmt.Printf("Username: %s\n", emailOrUsername)
 		authDetails, errGetAccount = h.GetAuthDetailsByUsername(emailOrUsername)
 	} else {
 		// Email
+		fmt.Printf("Email: %s\n", emailOrUsername)
 		authDetails, errGetAccount = h.GetAuthDetailsByEmail(emailOrUsername)
 	}
 	if errGetAccount != nil {
@@ -206,15 +225,19 @@ func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (
 	return authDetails.UserID, nil
 }
 
+// Given username, returns auth details (userID and password)
 func (h *AuthMiddleware) GetAuthDetailsByUsername(username string) (*AuthDetails, error) {
+	fmt.Println("Getting auth details by username")
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, password FROM accounts WHERE username=$1`, username)
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	defer rows.Close()
 	// Account DNE
 	if !rows.Next() {
+		fmt.Println("account DNE")
 		return nil, nil
 	}
 	var a AuthDetails
@@ -225,6 +248,7 @@ func (h *AuthMiddleware) GetAuthDetailsByUsername(username string) (*AuthDetails
 	return &a, nil
 }
 
+// Given email, returns auth details (userID and password)
 func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, password FROM accounts WHERE email=$1`, email)
@@ -244,6 +268,7 @@ func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, erro
 	return &a, nil
 }
 
+// Generates access token in the form of a cookie
 func (h *AuthMiddleware) GenerateAccessCookie(userid int) (*http.Cookie, error) {
 	accessClaims := &Claims{
 		UserID: userid,
@@ -256,27 +281,19 @@ func (h *AuthMiddleware) GenerateAccessCookie(userid int) (*http.Cookie, error) 
 	if err != nil {
 		return nil, err
 	}
-	accessCookie := &http.Cookie{
+	accessCookie := http.Cookie{
 		Name:     "access",
 		Value:    accessTokenString,
 		Path:     "/",
+		Expires:  accessClaims.ExpiresAt.Time,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 	}
-	return accessCookie, nil
+	return &accessCookie, nil
 }
 
-func isTokenValid(token *jwt.Token) error {
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		if claims.ExpiresAt.Time.Before(time.Now()) {
-			return fmt.Errorf("token is expired")
-		}
-		return nil
-	} else {
-		return fmt.Errorf("invalid token")
-	}
-}
-
+// Generates refresh token in the form of a cookie
 func (h *AuthMiddleware) GenerateRefreshCookie(userid int) (*http.Cookie, error) {
 	refreshClaims := &Claims{
 		UserID: userid,
@@ -289,14 +306,28 @@ func (h *AuthMiddleware) GenerateRefreshCookie(userid int) (*http.Cookie, error)
 	if err != nil {
 		return nil, err
 	}
-	refreshCookie := &http.Cookie{
+	refreshCookie := http.Cookie{
 		Name:     "refresh",
 		Value:    refreshTokenString,
 		Path:     "/",
+		Expires:  refreshClaims.ExpiresAt.Time,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 	}
-	return refreshCookie, nil
+	return &refreshCookie, nil
+}
+
+// Checks if an access or refresh token is still valid
+func isTokenValid(token *jwt.Token) error {
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		if claims.ExpiresAt.Time.Before(time.Now()) {
+			return fmt.Errorf("token is expired")
+		}
+		return nil
+	} else {
+		return fmt.Errorf("invalid token")
+	}
 }
 
 func (h *AuthMiddleware) VerifyAccessToken(tokenString string) error {
@@ -342,26 +373,22 @@ func (h *AuthMiddleware) GetClaimsFromToken(tokenString string) (*Claims, error)
 	return &claims, nil
 }
 
-func (h *AuthMiddleware) RefreshAccessIfNeeded(w http.ResponseWriter, r *http.Request) (accessCookie *http.Cookie) {
+func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (claims *Claims) {
 	// Check if access token is still valid
 	currentAccessCookie, _ := r.Cookie("access")
 	if currentAccessCookie != nil {
 		access := currentAccessCookie.Value
-		currentAccess, err := jwt.Parse(access, func(token *jwt.Token) (interface{}, error) {
+		var accessClaims Claims
+		currentAccess, err := jwt.ParseWithClaims(access, &accessClaims, func(token *jwt.Token) (interface{}, error) {
 			return []byte(h.accessSecret), nil
 		})
 		switch {
 		case currentAccess.Valid:
-			// Valid token >> continue request
-			return &http.Cookie{
-				Name:     "access",
-				Value:    currentAccess.Raw,
-				Path:     "/",
-				HttpOnly: true,
-				SameSite: http.SameSiteLaxMode,
-			}
+			// Valid token >> continue request returning userID
+			return &accessClaims
 		case errors.Is(err, jwt.ErrTokenExpired):
 			// Token expired >> continue to refresh
+			fmt.Println("Access expired")
 			break
 		default:
 			// Error other than token expired >> unauthorized
@@ -378,8 +405,8 @@ func (h *AuthMiddleware) RefreshAccessIfNeeded(w http.ResponseWriter, r *http.Re
 		return nil
 	}
 
-	claims := &Claims{}
-	_, err := jwt.ParseWithClaims(refreshCookie.Value, claims, func(token *jwt.Token) (interface{}, error) {
+	var refreshClaims Claims
+	_, err := jwt.ParseWithClaims(refreshCookie.Value, &refreshClaims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(h.refreshSecret), nil
 	})
 	switch {
@@ -393,13 +420,15 @@ func (h *AuthMiddleware) RefreshAccessIfNeeded(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil
 	}
-	newAccessCookie, err := h.GenerateAccessCookie(claims.UserID)
+	fmt.Println("REFRESHING ACCESS")
+	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID)
+	fmt.Printf("new access cookie: %v\n", newAccessCookie)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
 	}
 	http.SetCookie(w, newAccessCookie)
-	return newAccessCookie
+	return &refreshClaims
 }
 
 func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Request) {
@@ -410,6 +439,7 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 	}
 
 	refresh := http.Cookie{
@@ -419,6 +449,7 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 	}
 
 	http.SetCookie(w, &access)

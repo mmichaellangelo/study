@@ -1,1 +1,0 @@
-import meta.env.VITE_ACCESS_SECRET

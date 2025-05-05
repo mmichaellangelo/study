@@ -13,8 +13,13 @@ services:
       - type: bind
         source: ./SCHEMA.sql
         target: /docker-entrypoint-initdb.d/init.sql
-
     restart: unless-stopped # Configures the container to restart automatically unless manually stopped
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    ports:
+      - "8000:8080"
+    restart: unless-stopped
 
 volumes:
   postgres_data: # Defines the named volume used by the db service
