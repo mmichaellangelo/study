@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/mail"
@@ -54,12 +56,31 @@ var (
 	RestrictedPathRE = regexp.MustCompile(`^\/accounts\/.*$`)
 	LoginPathRE      = regexp.MustCompile(`^\/login\/?$`)
 	RegisterPathRE   = regexp.MustCompile(`^\/register\/?$`)
+	IdentityRouteRE  = regexp.MustCompile(`^\/me\/?$`)
 )
 
 func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
-	switch {
 
+	switch {
+	// IDENTITY ROUTE
+	case IdentityRouteRE.MatchString(url) && r.Method == http.MethodGet:
+		access := h.RefreshAccessIfNeeded(w, r)
+		_, err := jwt.Parse(access.Value, func(t *jwt.Token) (interface{}, error) {
+			return h.accessSecret, nil
+		})
+		if err != nil {
+			http.Error(w, "error parsing access cookie", http.StatusUnauthorized)
+		}
+		claims, err := h.GetClaimsFromToken(access.Value)
+		userID := claims.UserID
+		data, err := json.Marshal(map[string]int{
+			"userID": userID,
+		})
+		if err != nil {
+			http.Error(w, "error marshalling json", http.StatusInternalServerError)
+		}
+		w.Write(data)
 	// REGISTER ROUTE
 	case RegisterPathRE.MatchString(url) && r.Method == http.MethodPost:
 		err := r.ParseForm()
@@ -75,14 +96,16 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			strings.TrimSpace(username) == "" ||
 			strings.TrimSpace(password) == "" {
 			http.Error(w, "invalid email/username/password", http.StatusBadRequest)
+			return
 		}
 		// Create account
 		userID, err := h.accountHandler.CreateAccount(email, username, password)
 		if err != nil || userID < 0 {
 			http.Error(w, fmt.Sprintf("error creating account: %v", err), http.StatusInternalServerError)
+			return
 		}
 		// Login
-		h.Login(w, r, userID)
+		h.SetAuthCookies(w, r, userID)
 		w.WriteHeader(http.StatusOK)
 		return
 
@@ -106,12 +129,13 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.Login(w, r, userID)
+		h.SetAuthCookies(w, r, userID)
 		w.WriteHeader(http.StatusOK)
 		return
 
 	// RESTRICTED ROUTE
 	case RestrictedPathRE.MatchString(url):
+		h.RefreshAccessIfNeeded(w, r)
 		accessCookie, err := r.Cookie("access")
 		if err != nil {
 			if err == http.ErrNoCookie {
@@ -141,29 +165,16 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *AuthMiddleware) Login(w http.ResponseWriter, r *http.Request, userID int) {
-	accessToken, errGenAccess := h.GenerateAccessToken(userID)
-	refreshToken, errGenRefresh := h.GenerateRefreshToken(userID)
+func (h *AuthMiddleware) SetAuthCookies(w http.ResponseWriter, r *http.Request, userID int) {
+	accessCookie, errGenAccess := h.GenerateAccessCookie(userID)
+	refreshCookie, errGenRefresh := h.GenerateRefreshCookie(userID)
 	if errGenAccess != nil || errGenRefresh != nil {
 		http.Error(w, "error generating tokens", http.StatusInternalServerError)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access",
-		Value:    accessToken,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh",
-		Value:    refreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, accessCookie)
+	http.SetCookie(w, refreshCookie)
 }
 
 func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (userID int, err error) {
@@ -184,6 +195,9 @@ func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (
 	}
 	if errGetAccount != nil {
 		return -1, fmt.Errorf("error getting account: %w", errGetAccount)
+	}
+	if authDetails == nil {
+		return -1, fmt.Errorf("error getting auth details")
 	}
 	// Authenticate
 	if !VerifyPassword(password, authDetails.Password) {
@@ -230,19 +244,26 @@ func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, erro
 	return &a, nil
 }
 
-func (h *AuthMiddleware) GenerateAccessToken(userid int) (string, error) {
+func (h *AuthMiddleware) GenerateAccessCookie(userid int) (*http.Cookie, error) {
 	accessClaims := &Claims{
 		UserID: userid,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenExpiration)),
 		},
 	}
-	accesstoken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accesstokenstring, err := accesstoken.SignedString([]byte(h.accessSecret))
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	accessTokenString, err := accessToken.SignedString([]byte(h.accessSecret))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return accesstokenstring, nil
+	accessCookie := &http.Cookie{
+		Name:     "access",
+		Value:    accessTokenString,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return accessCookie, nil
 }
 
 func isTokenValid(token *jwt.Token) error {
@@ -256,7 +277,7 @@ func isTokenValid(token *jwt.Token) error {
 	}
 }
 
-func (h *AuthMiddleware) GenerateRefreshToken(userid int) (string, error) {
+func (h *AuthMiddleware) GenerateRefreshCookie(userid int) (*http.Cookie, error) {
 	refreshClaims := &Claims{
 		UserID: userid,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -264,11 +285,18 @@ func (h *AuthMiddleware) GenerateRefreshToken(userid int) (string, error) {
 		},
 	}
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-	refreshtokenstring, err := refreshToken.SignedString([]byte(h.refreshSecret))
+	refreshTokenString, err := refreshToken.SignedString([]byte(h.refreshSecret))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return refreshtokenstring, nil
+	refreshCookie := &http.Cookie{
+		Name:     "refresh",
+		Value:    refreshTokenString,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return refreshCookie, nil
 }
 
 func (h *AuthMiddleware) VerifyAccessToken(tokenString string) error {
@@ -314,22 +342,87 @@ func (h *AuthMiddleware) GetClaimsFromToken(tokenString string) (*Claims, error)
 	return &claims, nil
 }
 
-func (h *AuthMiddleware) RefreshAccess(refresh string) (string, error) {
+func (h *AuthMiddleware) RefreshAccessIfNeeded(w http.ResponseWriter, r *http.Request) (accessCookie *http.Cookie) {
+	// Check if access token is still valid
+	currentAccessCookie, _ := r.Cookie("access")
+	if currentAccessCookie != nil {
+		access := currentAccessCookie.Value
+		currentAccess, err := jwt.Parse(access, func(token *jwt.Token) (interface{}, error) {
+			return []byte(h.accessSecret), nil
+		})
+		switch {
+		case currentAccess.Valid:
+			// Valid token >> continue request
+			return &http.Cookie{
+				Name:     "access",
+				Value:    currentAccess.Raw,
+				Path:     "/",
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			}
+		case errors.Is(err, jwt.ErrTokenExpired):
+			// Token expired >> continue to refresh
+			break
+		default:
+			// Error other than token expired >> unauthorized
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return nil
+		}
+	}
+
+	refreshCookie, _ := r.Cookie("refresh")
+	if refreshCookie == nil {
+		// Remove cookies, unauthorized
+		h.DeleteAuthCookies(w, r)
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil
+	}
+
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(refresh, claims, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(refreshCookie.Value, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(h.refreshSecret), nil
 	})
+	switch {
+	case err == nil:
+		break
+	case errors.Is(err, jwt.ErrTokenExpired):
+		h.DeleteAuthCookies(w, r)
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil
+	default:
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil
+	}
+	newAccessCookie, err := h.GenerateAccessCookie(claims.UserID)
 	if err != nil {
-		return "", err
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
 	}
-	if !token.Valid {
-		return "", fmt.Errorf("invalid token")
+	http.SetCookie(w, newAccessCookie)
+	return newAccessCookie
+}
+
+func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Request) {
+	access := http.Cookie{
+		Name:     "access",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	}
-	newAccess, err := h.GenerateAccessToken(claims.UserID)
-	if err != nil {
-		return "", err
+
+	refresh := http.Cookie{
+		Name:     "refresh",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	}
-	return newAccess, nil
+
+	http.SetCookie(w, &access)
+	http.SetCookie(w, &refresh)
 }
 
 // HashPassword generates a bcrypt hash for the given password.
