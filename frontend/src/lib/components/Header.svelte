@@ -8,7 +8,7 @@
     <a href="/create">create</a>
     <a href="/explore">explore</a>
     {#if userState.ID != -1}
-        <p>Logged in as {userState.ID}</p>
+        <p>Logged in as {userState.Username}</p>
     {:else}
         <a href="/login">login</a>
         <a href="/register">register</a>

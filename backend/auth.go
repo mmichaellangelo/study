@@ -38,6 +38,7 @@ type Claims struct {
 // Details needed for user auth
 type AuthDetails struct {
 	UserID   int
+	Username string
 	Password string
 }
 
@@ -98,7 +99,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// REGISTER ROUTE
 	case RegisterPathRE.MatchString(url) && r.Method == http.MethodPost:
-		err := r.ParseForm()
+		err := r.ParseMultipartForm(0)
 		if err != nil {
 			http.Error(w, "error parsing form", http.StatusBadRequest)
 			return
@@ -120,13 +121,13 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Login
-		h.SetAuthCookies(w, r, userID)
+		h.SetAuthCookies(w, r, userID, username)
 		w.WriteHeader(http.StatusOK)
 		return
 
 	// LOGIN ROUTE
 	case LoginPathRE.MatchString(url) && r.Method == http.MethodPost:
-		err := r.ParseForm()
+		err := r.ParseMultipartForm(0)
 		if err != nil {
 			http.Error(w, "error parsing form", http.StatusBadRequest)
 			return
@@ -134,7 +135,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		emailOrUsername := r.FormValue("emailorusername")
 		password := r.FormValue("password")
 
-		userID, err := h.Authenticate(emailOrUsername, password)
+		userID, username, err := h.Authenticate(emailOrUsername, password)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error authenticating: %v", err), http.StatusInternalServerError)
 			return
@@ -143,8 +144,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-
-		h.SetAuthCookies(w, r, userID)
+		h.SetAuthCookies(w, r, userID, username)
 		w.WriteHeader(http.StatusOK)
 		return
 
@@ -181,9 +181,9 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Sets both refresh and access cookies
-func (h *AuthMiddleware) SetAuthCookies(w http.ResponseWriter, r *http.Request, userID int) {
-	accessCookie, errGenAccess := h.GenerateAccessCookie(userID)
-	refreshCookie, errGenRefresh := h.GenerateRefreshCookie(userID)
+func (h *AuthMiddleware) SetAuthCookies(w http.ResponseWriter, r *http.Request, userID int, username string) {
+	accessCookie, errGenAccess := h.GenerateAccessCookie(userID, username)
+	refreshCookie, errGenRefresh := h.GenerateRefreshCookie(userID, username)
 	if errGenAccess != nil || errGenRefresh != nil {
 		http.Error(w, "error generating tokens", http.StatusInternalServerError)
 		return
@@ -194,9 +194,9 @@ func (h *AuthMiddleware) SetAuthCookies(w http.ResponseWriter, r *http.Request, 
 }
 
 // Validates login credentials.
-func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (userID int, err error) {
+func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (userID int, username string, err error) {
 	if strings.TrimSpace(emailOrUsername) == "" || strings.TrimSpace(password) == "" {
-		return -1, fmt.Errorf("empty username or password")
+		return -1, "", fmt.Errorf("empty username or password")
 	}
 	// Distinguish username/email
 	_, errParseAddress := mail.ParseAddress(emailOrUsername)
@@ -213,23 +213,23 @@ func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (
 		authDetails, errGetAccount = h.GetAuthDetailsByEmail(emailOrUsername)
 	}
 	if errGetAccount != nil {
-		return -1, fmt.Errorf("error getting account: %w", errGetAccount)
+		return -1, "", fmt.Errorf("error getting account: %w", errGetAccount)
 	}
 	if authDetails == nil {
-		return -1, fmt.Errorf("error getting auth details")
+		return -1, "", fmt.Errorf("error getting auth details")
 	}
 	// Authenticate
 	if !VerifyPassword(password, authDetails.Password) {
-		return -1, nil
+		return -1, "", nil
 	}
-	return authDetails.UserID, nil
+	return authDetails.UserID, authDetails.Username, nil
 }
 
 // Given username, returns auth details (userID and password)
 func (h *AuthMiddleware) GetAuthDetailsByUsername(username string) (*AuthDetails, error) {
 	fmt.Println("Getting auth details by username")
 	rows, err := h.db.Query(context.Background(),
-		`SELECT id, password FROM accounts WHERE username=$1`, username)
+		`SELECT id, username, password FROM accounts WHERE username=$1`, username)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -241,7 +241,7 @@ func (h *AuthMiddleware) GetAuthDetailsByUsername(username string) (*AuthDetails
 		return nil, nil
 	}
 	var a AuthDetails
-	err = rows.Scan(&a.UserID, &a.Password)
+	err = rows.Scan(&a.UserID, &a.Username, &a.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (h *AuthMiddleware) GetAuthDetailsByUsername(username string) (*AuthDetails
 // Given email, returns auth details (userID and password)
 func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, error) {
 	rows, err := h.db.Query(context.Background(),
-		`SELECT id, password FROM accounts WHERE email=$1`, email)
+		`SELECT id, username, password FROM accounts WHERE email=$1`, email)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, erro
 		return nil, nil
 	}
 	var a AuthDetails
-	err = rows.Scan(&a.UserID, &a.Password)
+	err = rows.Scan(&a.UserID, &a.Username, &a.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -269,9 +269,10 @@ func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, erro
 }
 
 // Generates access token in the form of a cookie
-func (h *AuthMiddleware) GenerateAccessCookie(userid int) (*http.Cookie, error) {
+func (h *AuthMiddleware) GenerateAccessCookie(userid int, username string) (*http.Cookie, error) {
 	accessClaims := &Claims{
-		UserID: userid,
+		UserID:   userid,
+		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenExpiration)),
 		},
@@ -294,9 +295,10 @@ func (h *AuthMiddleware) GenerateAccessCookie(userid int) (*http.Cookie, error) 
 }
 
 // Generates refresh token in the form of a cookie
-func (h *AuthMiddleware) GenerateRefreshCookie(userid int) (*http.Cookie, error) {
+func (h *AuthMiddleware) GenerateRefreshCookie(userid int, username string) (*http.Cookie, error) {
 	refreshClaims := &Claims{
-		UserID: userid,
+		UserID:   userid,
+		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(refreshTokenExpiration)),
 		},
@@ -389,7 +391,6 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 		case errors.Is(err, jwt.ErrTokenExpired):
 			// Token expired >> continue to refresh
 			fmt.Println("Access expired")
-			break
 		default:
 			// Error other than token expired >> unauthorized
 			http.Error(w, "invalid token", http.StatusUnauthorized)
@@ -421,7 +422,7 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 		return nil
 	}
 	fmt.Println("REFRESHING ACCESS")
-	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID)
+	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID, refreshClaims.Username)
 	fmt.Printf("new access cookie: %v\n", newAccessCookie)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

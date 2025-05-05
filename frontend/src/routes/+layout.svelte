@@ -10,7 +10,7 @@
 
     onMount(() => {
         userState.ID = data.userID
-        console.log("setting userID to " + data.userID)
+        userState.Username = data.username
     })
 
 
