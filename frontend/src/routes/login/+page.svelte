@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { goto } from "$app/navigation";
+    import { GotoReload } from "$lib/functions/navigation";
 
     let isLoading = $state(false)
     let errorMessage = $state("")
@@ -19,14 +19,14 @@
                 errorMessage = await response.text()
                 return
             }
-            goto("/")
+            GotoReload("/")
         } catch (e: any) {
             errorMessage = e.toString()
         }
     }
 
 </script>
-<h2>Login</h2>
+<h2>login</h2>
 
 <form onsubmit={handleSubmit}>
     <label>Email or Username

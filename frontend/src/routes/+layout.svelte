@@ -8,10 +8,26 @@
 
 	let { children, data } = $props()
 
-    onMount(() => {
-        userState.ID = data.userID
-        userState.Username = data.username
-    })
+    onMount(async () => {
+        if (userState.ID == -1) {
+        try {
+            const res = await fetch(`http://localhost:8080/me`,
+                {
+                    method: "GET",
+                    credentials: "include",
+                }
+            )
+            const data = await res.json()
+            
+            userState.ID = data.userid
+            userState.Username = data.username
+            
+        } catch (e) {
+            userState.ID = -1
+            userState.Username = ""
+        }
+    }
+})
 
 
 </script>

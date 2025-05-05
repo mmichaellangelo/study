@@ -61,6 +61,7 @@ func NewAuthMiddleware(handlerToWrap http.Handler,
 var (
 	RestrictedPathRE = regexp.MustCompile(`^\/accounts\/.*$`)
 	LoginPathRE      = regexp.MustCompile(`^\/login\/?$`)
+	LogoutPathRE     = regexp.MustCompile(`\/logout\/?$`)
 	RegisterPathRE   = regexp.MustCompile(`^\/register\/?$`)
 	IdentityRouteRE  = regexp.MustCompile(`^\/me\/?$`)
 )
@@ -148,6 +149,12 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 
+	// LOGOUT ROUTE
+	case LogoutPathRE.MatchString(url) && r.Method == http.MethodPost:
+		h.DeleteAuthCookies(w, r)
+		w.WriteHeader(http.StatusOK)
+		return
+
 	// RESTRICTED ROUTE
 	case RestrictedPathRE.MatchString(url):
 		h.RefreshAccess(w, r)
@@ -205,11 +212,9 @@ func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (
 	// Get password hash from db
 	if errParseAddress != nil {
 		// Username
-		fmt.Printf("Username: %s\n", emailOrUsername)
 		authDetails, errGetAccount = h.GetAuthDetailsByUsername(emailOrUsername)
 	} else {
 		// Email
-		fmt.Printf("Email: %s\n", emailOrUsername)
 		authDetails, errGetAccount = h.GetAuthDetailsByEmail(emailOrUsername)
 	}
 	if errGetAccount != nil {
@@ -227,17 +232,14 @@ func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (
 
 // Given username, returns auth details (userID and password)
 func (h *AuthMiddleware) GetAuthDetailsByUsername(username string) (*AuthDetails, error) {
-	fmt.Println("Getting auth details by username")
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, username, password FROM accounts WHERE username=$1`, username)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 	defer rows.Close()
 	// Account DNE
 	if !rows.Next() {
-		fmt.Println("account DNE")
 		return nil, nil
 	}
 	var a AuthDetails
@@ -390,7 +392,6 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 			return &accessClaims
 		case errors.Is(err, jwt.ErrTokenExpired):
 			// Token expired >> continue to refresh
-			fmt.Println("Access expired")
 		default:
 			// Error other than token expired >> unauthorized
 			http.Error(w, "invalid token", http.StatusUnauthorized)
@@ -421,9 +422,7 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil
 	}
-	fmt.Println("REFRESHING ACCESS")
 	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID, refreshClaims.Username)
-	fmt.Printf("new access cookie: %v\n", newAccessCookie)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
