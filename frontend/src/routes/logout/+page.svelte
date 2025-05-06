@@ -27,13 +27,13 @@
 </script>
 
 {#if isLoading}
-    <p>Logging out...</p>
+    <p>logging out...</p>
 {:else}
     {#if data}
         {#if success}
-            <p>Log Out Success! Redirecting...</p>
+            <p>logout success! redirecting...</p>
         {:else}
-            <p>There was a problem logging you out. Please try refreshing the page.</p>
+            <p>there was a problem logging you out. please try refreshing the page.</p>
         {/if}
     {/if}
 {/if}

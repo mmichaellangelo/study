@@ -1,10 +1,50 @@
+:root {
+    --col-yellowhite: rgb(241, 242, 203);
+    --col-lightblue: rgb(142, 212, 235);
+    --col-darkblue: rgb(30, 36, 58);
+
+    --col-msg-error: rgb(255, 63, 63);
+    --col-msg-neutral: rgb(244, 251, 113);
+    --col-msg-success: rgb(84, 252, 121);
+}
+
 body {
-    background-color: rgb(30, 36, 58);
-    color: rgb(241, 242, 203);
+    background-color: var(--col-darkblue);
+    color: var(--col-yellowhite);
     font-family:Arial, Helvetica, sans-serif;
 }
 
 a {
-    color: rgb(142, 212, 235);
+    color: var(--col-lightblue);
     text-decoration: none;
+}
+
+input {
+    color: var(--col-darkblue);
+    background-color: var(--col-yellowhite);
+    border: 0px;
+}
+
+input:focus {
+    outline: 2px solid var(--col-lightblue);
+}
+
+*::selection {
+    background-color: var(--col-lightblue);
+    color: var(--col-darkblue);
+}
+
+button {
+    background-color: var(--col-yellowhite);
+    color: var(--col-darkblue);
+    border: 0px;
+}
+
+button:focus {
+    outline: 2px solid var(--col-lightblue);
+}
+
+button:active {
+    color: var(--col-yellowhite);
+    background-color: var(--col-darkblue);
 }

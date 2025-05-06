@@ -1,11 +1,20 @@
 <script lang="ts">
+    import StatusMessage from "$lib/components/StatusMessage.svelte";
     import { GotoReload } from "$lib/functions/navigation";
+    import type { StatusMessageData } from "$lib/types/types";
 
-    let isLoading = $state(false)
-    let errorMessage = $state("")
+    let formState = $state<StatusMessageData>({
+        loading: false,
+        message: "",
+        success: false,
+    })
 
     async function handleSubmit(event: SubmitEvent) {
-        isLoading = true
+        formState = {
+            loading: true,
+            message: "loading...",
+            success: false
+        }
         const form = event.target as HTMLFormElement
         const formData = new FormData(form)
 
@@ -16,12 +25,27 @@
                 credentials: "include"
             })
             if (!response.ok) {
-                errorMessage = await response.text()
-                return
+                formState = {
+                    loading: false,
+                    message: await response.text(),
+                    success: false,
+                }
+            } else {
+                formState = {
+                    loading: false,
+                    message: `login success! redirecting...`,
+                    success: true,
+                }
+                setTimeout(() => { GotoReload("/") }, 1000)
             }
-            GotoReload("/")
+            
         } catch (e: any) {
-            errorMessage = e.toString()
+            formState = {
+                loading: false,
+                message: "an unknown error occurred",
+                success: false,
+            }
+            return
         }
     }
 
@@ -29,17 +53,16 @@
 <h2>login</h2>
 
 <form onsubmit={handleSubmit}>
-    <label>Email or Username
-        <input type="text" name="emailorusername">
+    <label>email or username <br />
+        <input type="text" name="emailorusername" required>
     </label> <br />
-    <label>Password
-        <input type="password" name="password">
+    <label>password <br />
+        <input type="password" name="password" required>
     </label> <br />
-    <button type="submit" disabled={isLoading}>Log In</button>
+    <button type="submit" disabled={formState.loading}>Log In</button>
 </form>
-{#if isLoading}
-<p>Logging in...</p>
-{/if}
+
+<StatusMessage data={formState} />
 
 <style>
     form {
