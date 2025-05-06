@@ -26,7 +26,6 @@
     })
 </script>
 
-<h2>logout</h2>
 {#if isLoading}
     <p>Logging out...</p>
 {:else}

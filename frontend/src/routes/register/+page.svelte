@@ -1,6 +1,23 @@
-<h2>Register</h2>
+<script lang="ts">
+    async function handleSubmit(event: SubmitEvent) {
+        const form = event.target as HTMLFormElement
+        const formData = new FormData(form)
+        // try {
+        //     const response = await fetch("http://localhost:8080/register", {
+        //         method: "POST",
+        //         body: formData,
+        //         credentials: "include",
+        //     })
+        //     if (!response.ok {
+                
+        //     })
+        // }
+    }
+</script>
 
-<form action="http://localhost:8080/register" method="post">
+<h2>register</h2>
+
+<form onsubmit={handleSubmit}>
     <label>Email
         <input type="email" name="email">
     </label> <br />

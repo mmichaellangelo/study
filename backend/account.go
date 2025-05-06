@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,12 +19,12 @@ import (
 // TYPES
 
 type Account struct {
-	ID       int       `json:"id"`
-	Email    string    `json:"email"`
-	Username string    `json:"username"`
-	Picture  string    `json:"picture"`
-	Bio      string    `json:"bio"`
-	Created  time.Time `json:"created"`
+	ID       int         `json:"id"`
+	Email    string      `json:"email"`
+	Username string      `json:"username"`
+	Picture  pgtype.Text `json:"picture"`
+	Bio      pgtype.Text `json:"bio"`
+	Created  time.Time   `json:"created"`
 }
 
 type AccountHandler struct {
@@ -39,7 +40,7 @@ func NewAccountHandler(db *pgxpool.Pool) *AccountHandler {
 
 var (
 	AccountRE       = regexp.MustCompile(`^\/accounts\/?$`)
-	AccountREWithID = regexp.MustCompile(`^\/accounts\/(\d+)$`)
+	AccountREWithID = regexp.MustCompile(`^\/accounts\/(\d+)\/?$`)
 )
 
 func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +89,7 @@ func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // HELPERS
 
 func getAccountIDFromURL(url string) (int, error) {
-	groups := AccountRE.FindStringSubmatch(url)
+	groups := AccountREWithID.FindStringSubmatch(url)
 	if len(groups) != 2 {
 		return -1, fmt.Errorf("invalid URL")
 	}

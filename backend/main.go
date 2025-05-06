@@ -33,9 +33,9 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/accounts", accountHandler)
-	mux.Handle("/sets", setHandler)
-	mux.Handle("/cards", cardHandler)
+	mux.Handle("/accounts/", accountHandler)
+	mux.Handle("/sets/", setHandler)
+	mux.Handle("/cards/", cardHandler)
 
 	authMux := NewAuthMiddleware(mux, db, accountHandler, ACCESS_SECRET, REFRESH_SECRET)
 

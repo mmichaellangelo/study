@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/mail"
 	"regexp"
@@ -74,6 +75,11 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
+	clientIP := r.Header.Get("X-Forwarded-For")
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+	}
+
 	// Handle OPTIONS preflight requests
 	if r.Method == http.MethodOptions {
 		fmt.Println("Handled OPTIONS request")
@@ -84,10 +90,9 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	// IDENTITY ROUTE
 	case IdentityRouteRE.MatchString(url) && r.Method == http.MethodGet:
-		fmt.Println("IDENTITY")
+		log.Printf("Handled identity route for %s\n", clientIP)
 		claims := h.RefreshAccess(w, r)
 		if claims == nil {
-			http.Error(w, "null claims", http.StatusUnauthorized)
 			return
 		}
 		data, err := json.Marshal(claims)
@@ -100,6 +105,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// REGISTER ROUTE
 	case RegisterPathRE.MatchString(url) && r.Method == http.MethodPost:
+		log.Printf("Handled register route for %s\n", clientIP)
 		err := r.ParseMultipartForm(0)
 		if err != nil {
 			http.Error(w, "error parsing form", http.StatusBadRequest)
@@ -128,6 +134,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// LOGIN ROUTE
 	case LoginPathRE.MatchString(url) && r.Method == http.MethodPost:
+		log.Printf("Handled login route for %s\n", clientIP)
 		err := r.ParseMultipartForm(0)
 		if err != nil {
 			http.Error(w, "error parsing form", http.StatusBadRequest)
@@ -146,35 +153,22 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.SetAuthCookies(w, r, userID, username)
-		w.WriteHeader(http.StatusOK)
 		return
 
 	// LOGOUT ROUTE
 	case LogoutPathRE.MatchString(url) && r.Method == http.MethodPost:
+		log.Printf("Handled logout route for %s\n", clientIP)
 		h.DeleteAuthCookies(w, r)
-		w.WriteHeader(http.StatusOK)
 		return
 
 	// RESTRICTED ROUTE
 	case RestrictedPathRE.MatchString(url):
-		h.RefreshAccess(w, r)
-		accessCookie, err := r.Cookie("access")
-		if err != nil {
-			if err == http.ErrNoCookie {
-				http.Error(w, "missing access token", http.StatusUnauthorized)
-				return
-			}
-			http.Error(w, "bad request", http.StatusBadRequest)
+		log.Printf("Handled restricted route for %s\n", clientIP)
+		claims := h.RefreshAccess(w, r)
+		if claims == nil {
 			return
 		}
-		accessToken := accessCookie.Value
-
-		claims, err := h.GetClaimsFromToken(accessToken)
-		if err != nil {
-			http.Error(w, "error getting claims", http.StatusUnauthorized)
-			return
-		}
-		// add claims to context
+		log.Printf("CLAIMS: %v", claims)
 		ctx := context.WithValue(r.Context(), "claims", claims)
 		r = r.WithContext(ctx)
 		h.next.ServeHTTP(w, r)
