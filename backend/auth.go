@@ -60,11 +60,10 @@ func NewAuthMiddleware(handlerToWrap http.Handler,
 // ROUTES
 
 var (
-	RestrictedPathRE = regexp.MustCompile(`^\/accounts\/.*$`)
-	LoginPathRE      = regexp.MustCompile(`^\/login\/?$`)
-	LogoutPathRE     = regexp.MustCompile(`\/logout\/?$`)
-	RegisterPathRE   = regexp.MustCompile(`^\/register\/?$`)
-	IdentityRouteRE  = regexp.MustCompile(`^\/me\/?$`)
+	LoginPathRE     = regexp.MustCompile(`^\/login\/?$`)
+	LogoutPathRE    = regexp.MustCompile(`\/logout\/?$`)
+	RegisterPathRE  = regexp.MustCompile(`^\/register\/?$`)
+	IdentityRouteRE = regexp.MustCompile(`^\/me\/?$`)
 )
 
 // HTTP Routes
@@ -79,6 +78,8 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if clientIP == "" {
 		clientIP = r.RemoteAddr
 	}
+
+	log.Printf("%s %s %s\n", clientIP, r.Method, url)
 
 	// Handle OPTIONS preflight requests
 	if r.Method == http.MethodOptions {
@@ -162,21 +163,16 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 
 	// RESTRICTED ROUTE
-	case RestrictedPathRE.MatchString(url):
+	default:
 		log.Printf("Handled restricted route for %s\n", clientIP)
 		claims := h.RefreshAccess(w, r)
 		if claims == nil {
 			return
 		}
-		log.Printf("CLAIMS: %v", claims)
 		ctx := context.WithValue(r.Context(), "claims", claims)
 		r = r.WithContext(ctx)
 		h.next.ServeHTTP(w, r)
 		return
-
-	// UNRESTRICTED ROUTE
-	default:
-		h.next.ServeHTTP(w, r)
 	}
 
 }

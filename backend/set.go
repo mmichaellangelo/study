@@ -2,20 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Set struct {
-	ID          int       `json:"id"`
-	AccountID   int       `json:"account_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Created     time.Time `json:"created"`
-	Cards       *[]Card   `json:"cards"`
+	ID          int         `json:"id"`
+	AccountID   int         `json:"account_id"`
+	Name        pgtype.Text `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Created     time.Time   `json:"created"`
+	Cards       *[]Card     `json:"cards"`
 }
 
 type SetHandler struct {
@@ -27,8 +31,60 @@ func NewSetHandler(db *pgxpool.Pool, accountHandler *AccountHandler) *SetHandler
 	return &SetHandler{db: db, accountHandler: accountHandler}
 }
 
-func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+var (
+	SetRE       = regexp.MustCompile((`^\/sets\/?$`))
+	SetREWithID = regexp.MustCompile(`^\/sets\/(\d+)\/?$`)
+)
 
+func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Path
+	claims := r.Context().Value("claims").(*Claims)
+	switch {
+	// CREATE SET ROUTE
+	case SetRE.MatchString(url):
+		setID, err := h.CreateSet(claims.UserID)
+		if err != nil {
+			http.Error(w, "error creating set", http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(map[string]int{
+			"id": setID,
+		})
+		if err != nil {
+			http.Error(w, "error creating set", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+		return
+
+	// GET SET BY ID ROUTE
+	case SetREWithID.MatchString(url) && r.Method == http.MethodGet:
+		groups := SetREWithID.FindStringSubmatch(url)
+		if len(groups) != 2 {
+			http.Error(w, "invalid url", http.StatusBadRequest)
+			return
+		}
+		setID, err := strconv.Atoi(groups[1])
+		if err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		set, err := h.GetSetByID(setID)
+		if err != nil {
+			http.Error(w, "error getting set", http.StatusNotFound)
+		}
+		data, err := json.Marshal(set)
+		if err != nil {
+			http.Error(w, "error marshalling json", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+		return
+	default:
+		return
+	}
 }
 
 ////////////
@@ -39,22 +95,22 @@ func (h *SetHandler) CreateSet(account_id int) (id int, err error) {
 	// TODO perhaps make a SQL function that does this instead!
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id FROM accounts WHERE id=$1`, account_id)
-	defer rows.Close()
 	if err != nil {
 		return -1, fmt.Errorf("error querying account: %w", err)
 	}
+	defer rows.Close()
 	if !rows.Next() {
 		return -1, fmt.Errorf("account does not exist")
 	}
 	rows.Close()
 	// Create set
 	rows, err = h.db.Query(context.Background(),
-		`INSERT INTO sets account_id
+		`INSERT INTO sets (account_id)
 		 VALUES($1) RETURNING id`, account_id)
-	defer rows.Close()
 	if err != nil {
 		return -1, fmt.Errorf("error inserting into database: %w", err)
 	}
+	defer rows.Close()
 	if !rows.Next() {
 		return -1, fmt.Errorf("error inserting into database")
 	}
@@ -76,10 +132,10 @@ func (h *SetHandler) GetSetByID(set_id int) (*Set, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, acocunt_id, name, description, created
 		 FROM sets WHERE id=$1`, set_id)
-	defer rows.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error getting set: %w", err)
 	}
+	defer rows.Close()
 	if !rows.Next() {
 		return nil, nil
 	}
@@ -105,10 +161,10 @@ func (h *SetHandler) GetSetWithCards(set_id int) (*Set, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, set_id, front, back, created
 		 FROM cards WHERE set_id=$1`, set_id)
-	defer rows.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error getting cards from db: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var c Card
 		err := rows.Scan(&c.ID, &c.SetID, &c.Front, &c.Back, &c.Created)
@@ -138,10 +194,10 @@ func (h *SetHandler) GetSetsByAccountID(account_id int) (*[]Set, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, account_id, name, description, created
 		 FROM sets WHERE account_id=$1`, account_id)
-	defer rows.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error scanning sets: %w", err)
 	}
+	defer rows.Close()
 	var sets []Set
 	for rows.Next() {
 		var s Set

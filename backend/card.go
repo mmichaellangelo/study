@@ -8,15 +8,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Card struct {
-	ID      int       `json:"id"`
-	SetID   int       `json:"set_id"`
-	Front   string    `json:"front"`
-	Back    string    `json:"back"`
-	Created time.Time `json:"created"`
+	ID      int         `json:"id"`
+	SetID   int         `json:"set_id"`
+	Front   pgtype.Text `json:"front"`
+	Back    pgtype.Text `json:"back"`
+	Created time.Time   `json:"created"`
 }
 
 type CardHandler struct {

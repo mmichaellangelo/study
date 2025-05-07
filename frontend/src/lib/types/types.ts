@@ -1,11 +1,18 @@
 export interface Card {
-    front: string,
-    back: string,
+    id: number,
+    set_id: number,
+    front?: string,
+    back?: string,
+    created: Date
 }
 
 export interface Set {
+    id: number,
+    account_id: number,
     name: string,
-    cards: Card[],
+    description: string,
+    created: Date,
+    cards?: Card[],
 }
 
 export interface StatusMessageData {
