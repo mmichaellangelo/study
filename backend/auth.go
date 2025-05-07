@@ -290,7 +290,7 @@ func (h *AuthMiddleware) GenerateAccessCookie(userid int, username string) (*htt
 	return &accessCookie, nil
 }
 
-// Generates refresh token in the form of a cookie
+// Generates refresh token in the form of a cookie and stores the token in the database
 func (h *AuthMiddleware) GenerateRefreshCookie(userid int, username string) (*http.Cookie, error) {
 	refreshClaims := &Claims{
 		UserID:   userid,
@@ -312,6 +312,14 @@ func (h *AuthMiddleware) GenerateRefreshCookie(userid int, username string) (*ht
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
+	}
+	// Add refresh token to database
+	_, err = h.db.Exec(context.Background(),
+		`INSERT INTO refreshtokens (account_id, token, expires)
+		 VALUES($1, $2, $3)`, refreshClaims.UserID, refreshTokenString, refreshClaims.ExpiresAt.Time)
+	if err != nil {
+		log.Printf("error inserting refresh into table: %v", err)
+		return nil, err
 	}
 	return &refreshCookie, nil
 }
@@ -343,7 +351,8 @@ func (h *AuthMiddleware) VerifyAccessToken(tokenString string) error {
 }
 
 func (h *AuthMiddleware) VerifyRefreshToken(tokenString string) error {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	var claims Claims
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(h.refreshSecret), nil
 	})
 	if err != nil {
@@ -353,13 +362,36 @@ func (h *AuthMiddleware) VerifyRefreshToken(tokenString string) error {
 	if err != nil {
 		return err
 	}
+	// Check that refresh token exists in database
+	rows, err := h.db.Query(context.Background(),
+		`SELECT token FROM refreshtokens
+		 WHERE account_id=$1`, claims.UserID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	found := false
+	for rows.Next() {
+		var t string
+		err := rows.Scan(&t)
+		if err != nil {
+			return err
+		}
+		if t == tokenString {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("token has been invalidated")
+	}
 	return nil
 }
 
-func (h *AuthMiddleware) GetClaimsFromToken(tokenString string) (*Claims, error) {
-	claims := Claims{}
+func (h *AuthMiddleware) GetClaimsFromRefresh(tokenString string) (*Claims, error) {
+	var claims Claims
 	token, err := jwt.ParseWithClaims(tokenString, &claims, func(t *jwt.Token) (interface{}, error) {
-		return []byte(h.accessSecret), nil
+		return []byte(h.refreshSecret), nil
 	})
 	if err != nil {
 		return nil, err
@@ -416,6 +448,12 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil
 	}
+
+	err = h.VerifyRefreshToken(refreshCookie.Value)
+	if err != nil {
+		h.DeleteAuthCookies(w, r)
+		return
+	}
 	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID, refreshClaims.Username)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -444,6 +482,22 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
+	}
+
+	// Remove refresh token from db
+	refreshCookie, err := r.Cookie("refresh")
+	if err == nil {
+		token := refreshCookie.Value
+		claims, err := h.GetClaimsFromRefresh(token)
+		if err != nil {
+			log.Printf("error getting claims from token: %v\n", err)
+		}
+		log.Println(claims)
+		_, err = h.db.Exec(context.Background(),
+			`DELETE FROM refreshtokens WHERE account_id=$1 AND token=$2`, claims.UserID, token)
+		if err != nil {
+			log.Println("error deleting token from db")
+		}
 	}
 
 	http.SetCookie(w, &access)
