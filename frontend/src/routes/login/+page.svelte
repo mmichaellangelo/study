@@ -1,4 +1,5 @@
 <script lang="ts">
+    import Loader from "$lib/components/Loader.svelte";
     import StatusMessage from "$lib/components/StatusMessage.svelte";
     import { GotoReload } from "$lib/functions/navigation";
     import type { StatusMessageData } from "$lib/types/types";
@@ -12,7 +13,7 @@
     async function handleSubmit(event: SubmitEvent) {
         formState = {
             loading: true,
-            message: "loading...",
+            message: "",
             success: false
         }
         const form = event.target as HTMLFormElement
@@ -50,7 +51,13 @@
     }
 
 </script>
-<h2>login</h2>
+
+<div id="title">
+    <h2>login</h2>
+    {#if formState.loading}
+        <Loader />
+    {/if}
+</div>
 
 <form onsubmit={handleSubmit}>
     <label>email or username <br />
@@ -62,9 +69,20 @@
     <button type="submit" disabled={formState.loading}>Log In</button>
 </form>
 
+<br />
+
 <StatusMessage data={formState} />
 
 <style>
+    #title {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    #title>h2 {
+        margin-right: 1rem;
+    }
     form {
         display: flex;
         flex-direction: column;

@@ -1,9 +1,50 @@
 <script lang="ts">
+    import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
+    import { onMount } from "svelte";
+
+    let isLoading = $state(false)
 
     const blankCard: Card = {front: "", back: ""}
+
     let set = $state<Set>({name: "", cards: [blankCard]});
 
+    let created = $state(false)
+    
+    let titleTimeout = 0
+
+    onMount(async () => {
+        const res = CreateSet()
+    })
+
+    async function handleUpdateTitle(e: Event) {
+        const inputElement = e.target as HTMLInputElement
+        const newTitle = inputElement.value
+        titleTimeout = Date.now()
+        setTimeout(() => {
+            if (Date.now() - titleTimeout > 800) {
+                
+            }
+        }, 1000)
+    }
+
+    async function UpdateTitle() {
+        if (!created) {
+            
+        }
+    }
+
+    async function CreateSet() {
+        try {
+            const res = await fetch("http://localhost:8080/sets", {
+                method: "POST",
+                credentials: "include",
+            })
+        } catch (e) {
+            return Promise.reject()
+        }
+    }
+    
     function addCard() {
         set.cards.push({...blankCard})
         // Update database
@@ -39,13 +80,19 @@
 
     set = { ...set }; // Force Svelte to recognize the change and update the UI.  Important!
   }
-</script>
 
-<h2>create a set</h2>
+
+</script>
+<div id="title">
+    <h2>create a set</h2>
+    {#if isLoading}
+        <Loader />
+    {/if}
+</div>
 
 <div id="create_frame">
     <form>
-        <input type="text" placeholder="title" bind:value={set.name}>
+        <input type="text" placeholder="title" bind:value={set.name} onchange={handleUpdateTitle}>
         <br />
             {#each set.cards as card, index}
             <div class="card" draggable="true"
@@ -65,5 +112,13 @@
 </div>
 
 <style>
-    
+    #title {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    #title>h2 {
+        margin-right: 1rem;
+    }
 </style>
