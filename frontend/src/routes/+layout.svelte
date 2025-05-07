@@ -33,4 +33,12 @@
 </script>
 <Header />
 
-{@render children?.()}
+<div id="page_body">
+    {@render children?.()}
+</div>
+
+<style>
+    #page_body {
+        padding: 1rem;
+    }
+</style>

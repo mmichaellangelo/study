@@ -1,7 +1,9 @@
 :root {
-    --col-yellowhite: rgb(241, 242, 203);
+    --col-yellowhite: rgb(255, 253, 221);
     --col-lightblue: rgb(142, 212, 235);
+    --col-greenblue: rgb(105, 240, 204);
     --col-darkblue: rgb(30, 36, 58);
+    --col-lightpink: rgb(238, 140, 235);
 
     --col-msg-error: rgb(255, 63, 63);
     --col-msg-neutral: rgb(244, 251, 113);
@@ -12,11 +14,20 @@ body {
     background-color: var(--col-darkblue);
     color: var(--col-yellowhite);
     font-family:Arial, Helvetica, sans-serif;
+    margin: 0px;
 }
 
 a {
-    color: var(--col-lightblue);
+    color: var(--col-greenblue);
     text-decoration: none;
+}
+
+a:hover {
+    color: var(--col-lightpink);
+}
+
+a:active {
+    color: var(--col-yellowhite);
 }
 
 input {
@@ -50,4 +61,8 @@ button:focus {
 button:active {
     color: var(--col-yellowhite);
     background-color: var(--col-darkblue);
+}
+
+label {
+    color: var(--col-lightblue);
 }

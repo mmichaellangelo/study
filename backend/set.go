@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -41,7 +42,7 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	claims := r.Context().Value("claims").(*Claims)
 	switch {
 	// CREATE SET ROUTE
-	case SetRE.MatchString(url):
+	case SetRE.MatchString(url) && r.Method == http.MethodPost:
 		setID, err := h.CreateSet(claims.UserID)
 		if err != nil {
 			http.Error(w, "error creating set", http.StatusInternalServerError)
@@ -73,6 +74,8 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		set, err := h.GetSetByID(setID)
 		if err != nil {
 			http.Error(w, "error getting set", http.StatusNotFound)
+			log.Printf("error getting set: %v\n", err)
+			return
 		}
 		data, err := json.Marshal(set)
 		if err != nil {
@@ -82,6 +85,22 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 		return
+
+	// GET ACCOUNT SETS ROUTE
+	case SetRE.MatchString(url) && r.Method == http.MethodGet:
+		sets, err := h.GetSetsByAccountID(claims.UserID)
+		if err != nil {
+			http.Error(w, "error getting sets", http.StatusBadRequest)
+			return
+		}
+		data, err := json.Marshal(sets)
+		if err != nil {
+			http.Error(w, "error marshalling json", http.StatusInternalServerError)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+		return
+
 	default:
 		return
 	}
@@ -130,7 +149,7 @@ func (h *SetHandler) CreateSet(account_id int) (id int, err error) {
 
 func (h *SetHandler) GetSetByID(set_id int) (*Set, error) {
 	rows, err := h.db.Query(context.Background(),
-		`SELECT id, acocunt_id, name, description, created
+		`SELECT id, account_id, name, description, created
 		 FROM sets WHERE id=$1`, set_id)
 	if err != nil {
 		return nil, fmt.Errorf("error getting set: %w", err)

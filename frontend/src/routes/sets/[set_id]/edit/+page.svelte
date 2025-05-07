@@ -2,21 +2,24 @@
     import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
-    import type { Update } from "vite";
 
     let isLoading = $state(false)
 
     let { data } = $props()
 
-    let setLocal = $state<Set|undefined>(data.set);
-    let setRemote = $state<Set|undefined>(data.set); 
+    let setLocal = $state<Set|undefined>(data.set)
+    let setRemote = $state<Set|undefined>(data.set)
+    let synced = $derived(setLocal == setRemote)
 
-    interface UpdateItem {
+    $effect(() => {
+        console.log(setLocal)
+    })
+
+    interface Update {
         handle(): Promise<Response>
-
     }
 
-    class TitleUpdate implements UpdateItem {
+    class TitleUpdate implements Update {
         private newTitle: string
 
         constructor(newTitle: string) {
@@ -24,12 +27,15 @@
         }
 
         public async handle(): Promise<Response> {
-            return await fetch(`http://localhost:8080/sets/${setLocal?.id}`)
+            return await fetch(`http://localhost:8080/sets/${setLocal?.id}`, {
+                method: "PATCH",
+                credentials: "include",
+            })
         }
 
     }
 
-    class CardUpdate implements UpdateItem {
+    class CardUpdate implements Update {
         private newFront: string
         private newBack: string
 
@@ -44,7 +50,7 @@
 
     }
 
-    let queue = $state<UpdateItem[]>([])
+    let queue = $state<Update[]>([])
     let isProcessingQueue = $state(false)
 
     async function processQueue() {
@@ -65,6 +71,7 @@
 </script>
 
 <div id="title">
+    <h2>edit set</h2>
     {#if isLoading}
         <Loader />
     {/if}
@@ -73,7 +80,11 @@
 <div id="create_frame">
     {#if setLocal}
     <form>
-        <input type="text" placeholder="title" bind:value={setLocal.name} onchange={handleUpdateTitle}>
+        <label>
+            title <br />
+            <input type="text" placeholder="title" bind:value={setLocal.name} onchange={handleUpdateTitle}>
+        </label>
+        
         <br />
         {#if setLocal.cards}
             {#each setLocal.cards as card, index}
