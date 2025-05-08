@@ -1,7 +1,7 @@
 import type { Set } from "$lib/types/types";
-import type { PageLoad } from "./$types";
+import type { LayoutLoad } from "./$types";
 
-export const load: PageLoad = async ({ params }) => {
+export const load: LayoutLoad = async ({ params }) => {
     try {
         const res = await fetch(`http://localhost:8080/sets/${params.set_id}`, {
             method: "GET",

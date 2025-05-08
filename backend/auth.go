@@ -520,7 +520,7 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 	// Remove refresh token from db
 	refreshCookie, err := r.Cookie("refresh")
 	if err != nil {
-		log.Printf("FATAL: %s did not send refresh cookie, skipping db refresh deletion\n", clientIP)
+		log.Printf("%s did not send refresh cookie\n", clientIP)
 	} else {
 		token := refreshCookie.Value
 		claims, err := h.GetClaimsFromRefresh(token)

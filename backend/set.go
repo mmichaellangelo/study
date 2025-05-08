@@ -24,6 +24,12 @@ type Set struct {
 	Cards       *[]Card     `json:"cards"`
 }
 
+type SetUpdate struct {
+	Name        *string       `json:"name"`
+	Description *string       `json:"description"`
+	Cards       *[]CardUpdate `json:"cards"`
+}
+
 type SetHandler struct {
 	db             *pgxpool.Pool
 	accountHandler *AccountHandler
@@ -48,6 +54,8 @@ var (
 func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 	claims := r.Context().Value("claims").(*Claims)
+	clientIP := r.Context().Value("clientip").(string)
+
 	switch {
 
 	// CREATE SET ROUTE
@@ -108,6 +116,68 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
+		return
+
+	// SET UPDATE ROUTE
+	case SetREWithID.MatchString(url) && r.Method == http.MethodPatch:
+		groups := CardREWithSetID.FindStringSubmatch(url)
+		if len(groups) != 2 {
+			log.Println("invalid URL")
+			http.Error(w, "invalid URL", http.StatusBadRequest)
+			return
+		}
+		set_id, err := strconv.Atoi(groups[1])
+		if err != nil {
+			log.Printf("error parsing id from url: %v\n", err)
+			http.Error(w, "invalid ID", http.StatusBadRequest)
+		}
+		var update SetUpdate
+		defer r.Body.Close()
+		bytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("error reading body for %s: %v\n", clientIP, err)
+			http.Error(w, "error reading body", http.StatusBadRequest)
+			return
+		}
+		err = json.Unmarshal(bytes, &update)
+		if err != nil {
+			log.Printf("error unmarshalling json for %s: %v\n", clientIP, err)
+			http.Error(w, "error unmarshalling json", http.StatusBadRequest)
+			return
+		}
+		if update.Name != nil {
+			h.UpdateName(set_id, *update.Name)
+		}
+		if update.Description != nil {
+			h.UpdateDescription(set_id, *update.Description)
+		}
+		if update.Cards != nil {
+			// update/create cards
+			for _, u := range *update.Cards {
+				// If card exists >> update
+				if u.ID != nil {
+					err := h.cardHandler.UpdateCard(u)
+					log.Printf("error updating card for %s: %v\n", clientIP, err)
+				} else {
+					// New card >> create
+					_, err := h.cardHandler.CreateCard(set_id, pgtype.Text{String: u.Front}, pgtype.Text{String: u.Back})
+					log.Printf("error creating card for %s: %v\n", clientIP, err)
+				}
+			}
+		}
+		set, err := h.GetSetByID(set_id)
+		if err != nil {
+			log.Printf("error getting set for %s: %v\n", clientIP, err)
+			http.Error(w, "error getting set", http.StatusInternalServerError)
+			return
+		}
+		returnBytes, err := json.Marshal(set)
+		if err != nil {
+			log.Printf("error marshalling json for %s: %v\n", clientIP, err)
+			http.Error(w, "error marshalling json", http.StatusInternalServerError)
+			return
+		}
+		w.Write(returnBytes)
 		return
 
 	// INSERT CARD ROUTE

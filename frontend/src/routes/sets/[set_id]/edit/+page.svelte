@@ -9,71 +9,68 @@
 
     let setLocal = $state<Set|undefined>(data.set)
     let setRemote = $state<Set|undefined>(data.set)
-    let synced = $derived(setLocal == setRemote)
+    let synced = $derived.by(() => {
+        if (isProcessingQueue) {
+            return false
+        }
+        if (setLocal === undefined || setRemote === undefined) {
+            return false
+        }
+        if (setLocal.name != setRemote.name) {
+            return false
+        }
+        return true
+    })
 
     $effect(() => {
         console.log(setLocal)
     })
 
     interface Update {
-        handle(): Promise<Response>
+        type: string
     }
 
-    class TitleUpdate implements Update {
-        private newTitle: string
-
-        constructor(newTitle: string) {
-            this.newTitle = newTitle
-        }
-
-        public async handle(): Promise<Response> {
-            return await fetch(`http://localhost:8080/sets/${setLocal?.id}`, {
-                method: "PATCH",
-                credentials: "include",
-            })
-        }
-
+    interface CardUpdate extends Update {
+        type: "card"
+        id: number
+        newFront?: string
+        newBack?: string
     }
 
-    class CardUpdate implements Update {
-        private newFront: string
-        private newBack: string
-
-        constructor(newFront: string, newBack: string) {
-            this.newFront = newFront
-            this.newBack = newBack
-        }
-
-        public async handle(): Promise<Response> {
-            return await fetch(`http://localhost:8080/cards`)
-        }
-
+    interface NameUpdate extends Update {
+        type: "name"
+        newTitle: string
     }
 
     let queue = $state<Update[]>([])
     let isProcessingQueue = $state(false)
 
     async function processQueue() {
+        isProcessingQueue = true
         
+        for (var i = 0; i < queue.length; i++) {
+            if (queue[i].type == "title") {
+
+            }
+        }
     }
 
     onMount(async () => {
         if (data.set) {
-            setRemote = setLocal = data.set
+            setRemote = data.set
+            setLocal = data.set
         }
     })
-
-    async function handleUpdateTitle(e: Event) {
-        const inputElement = e.target as HTMLInputElement
-        const newTitle = inputElement.value
-    }
 
 </script>
 
 <div id="title">
-    <h2>edit set</h2>
+    <h2>{setLocal?.name}</h2>
     {#if isLoading}
         <Loader />
+    {/if}
+    {#if synced}
+        <span>synced</span>
     {/if}
 </div>
 
@@ -82,7 +79,7 @@
     <form>
         <label>
             title <br />
-            <input type="text" placeholder="title" bind:value={setLocal.name} onchange={handleUpdateTitle}>
+            <input type="text" placeholder="title" bind:value={setLocal.name}>
         </label>
         
         <br />

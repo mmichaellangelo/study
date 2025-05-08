@@ -6,30 +6,7 @@
     import "$lib/styles/global.css"
     import { onMount } from "svelte";
 
-	let { children, data } = $props()
-
-    onMount(async () => {
-        if (userState.ID == -1) {
-        try {
-            const res = await fetch(`http://localhost:8080/me`,
-                {
-                    method: "GET",
-                    credentials: "include",
-                }
-            )
-            const data = await res.json()
-
-            console.log(data)
-            
-            userState.ID = data.userid
-            userState.Username = data.username
-            
-        } catch (e) {
-            userState.ID = -1
-            userState.Username = ""
-        }
-    }
-})
+	let { children } = $props()
 
 
 </script>

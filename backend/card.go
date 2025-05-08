@@ -19,6 +19,12 @@ type Card struct {
 	Created time.Time   `json:"created"`
 }
 
+type CardUpdate struct {
+	ID    *int   `json:"id"`
+	Front string `json:"front"`
+	Back  string `json:"back"`
+}
+
 type CardHandler struct {
 	db *pgxpool.Pool
 }
@@ -82,4 +88,17 @@ func (h *CardHandler) GetCardsBySetID(set_id int) (*[]Card, error) {
 		cards = append(cards, c)
 	}
 	return &cards, nil
+}
+
+////////////
+// UPDATE
+
+func (h *CardHandler) UpdateCard(u CardUpdate) error {
+	_, err := h.db.Exec(context.Background(),
+		`UPDATE cards SET front=$1, back=$2
+		 WHERE id=$3`, u.Front, u.Back, u.ID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
