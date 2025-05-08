@@ -28,8 +28,8 @@ func main() {
 
 	// Init handlers
 	accountHandler := NewAccountHandler(db)
-	setHandler := NewSetHandler(db, accountHandler)
 	cardHandler := NewCardHandler(db)
+	setHandler := NewSetHandler(db, accountHandler, cardHandler)
 
 	mux := http.NewServeMux()
 

@@ -20,7 +20,7 @@
                 <p>loading...</p>
             {:else}
                 {#if userState.ID != -1}
-                    <p>Logged in as <a href={`/accounts/${userState.ID}`}>{userState.Username}</a></p>
+                    <p>logged in as <a href={`/accounts/${userState.ID}`}>{userState.Username}</a></p>
                     <a href="/logout">log out</a>
                 {:else}
                     <a href="/login">login</a>
@@ -40,7 +40,7 @@
 
 <style>
     #header {
-        background-color: rgb(64, 52, 135);
+        background-color: var(--col-purplegrey);
         padding: 1rem;
     }
 

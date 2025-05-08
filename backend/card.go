@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -43,15 +42,44 @@ func (h *CardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 ////////////
 // CREATE
 
-func (h *CardHandler) CreateCard(stack_id int, front string, back string) error {
-	if strings.TrimSpace(front) == "" && strings.TrimSpace(back) == "" {
-		return fmt.Errorf("front and back are both empty")
-	}
-	_, err := h.db.Exec(context.Background(),
-		`INSERT INTO cards stack_id, front, back
-		 VALUES($1, $2, $3)`, stack_id, front, back)
+func (h *CardHandler) CreateCard(stack_id int, front pgtype.Text, back pgtype.Text) (*Card, error) {
+	rows, err := h.db.Query(context.Background(),
+		`INSERT INTO cards 
+		 stack_id, front, back
+		 VALUES($1, $2, $3)
+		 RETURNING id, set_id, front, back, created`, stack_id, front, back)
 	if err != nil {
-		return fmt.Errorf("error creating card: %w", err)
+		return nil, fmt.Errorf("error creating card: %w", err)
 	}
-	return nil
+	defer rows.Close()
+	rows.Next()
+	var c Card
+	err = rows.Scan(&c.ID, &c.SetID, &c.Front, &c.Back, &c.Created)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+//////////
+// READ
+
+func (h *CardHandler) GetCardsBySetID(set_id int) (*[]Card, error) {
+	rows, err := h.db.Query(context.Background(),
+		`SELECT id, set_id, front, back, created
+		 FROM cards WHERE set_id=$1`, set_id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cards []Card
+	for rows.Next() {
+		var c Card
+		err := rows.Scan(&c.ID, &c.SetID, &c.Front, &c.Back, &c.Created)
+		if err != nil {
+			return nil, err
+		}
+		cards = append(cards, c)
+	}
+	return &cards, nil
 }

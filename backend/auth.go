@@ -80,6 +80,8 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("%s %s %s\n", clientIP, r.Method, url)
+	ctx := context.WithValue(r.Context(), "clientip", clientIP)
+	r = r.WithContext(ctx)
 
 	// Handle OPTIONS preflight requests
 	if r.Method == http.MethodOptions {
@@ -399,7 +401,23 @@ func (h *AuthMiddleware) GetClaimsFromRefresh(tokenString string) (*Claims, erro
 	return &claims, nil
 }
 
+func (h *AuthMiddleware) GetClaimsFromAccess(tokenString string) (*Claims, error) {
+	var claims Claims
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(h.accessSecret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = isTokenValid(token)
+	if err != nil {
+		return nil, err
+	}
+	return &claims, nil
+}
+
 func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (claims *Claims) {
+	clientIP := r.Context().Value("clientip").(string)
 	// Check if access token is still valid
 	currentAccessCookie, _ := r.Cookie("access")
 	if currentAccessCookie != nil {
@@ -416,6 +434,7 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 			// Token expired >> continue to refresh
 		default:
 			// Error other than token expired >> unauthorized
+			log.Printf("error parsing access claims for %s: %v\n", clientIP, err)
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return nil
 		}
@@ -424,6 +443,7 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 	refreshCookie, _ := r.Cookie("refresh")
 	if refreshCookie == nil {
 		// Remove cookies, unauthorized
+		log.Printf("%s did not provide refresh token\n", clientIP)
 		h.DeleteAuthCookies(w, r)
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil
@@ -437,29 +457,42 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 	case err == nil:
 		break
 	case errors.Is(err, jwt.ErrTokenExpired):
+		log.Printf("%s provided an expired refresh token\n", clientIP)
 		h.DeleteAuthCookies(w, r)
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil
 	default:
+		log.Printf("error parsing refresh token for %s: %v\n", clientIP, err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return nil
 	}
 
 	err = h.VerifyRefreshToken(refreshCookie.Value)
 	if err != nil {
+		log.Printf("%s provided invalid refresh token: %v\n", clientIP, err)
 		h.DeleteAuthCookies(w, r)
-		return
+		return nil
 	}
 	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID, refreshClaims.Username)
 	if err != nil {
+		log.Printf("error generating new access cookie for %s: %v\n", clientIP, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
 	}
+	newAccessClaims, err := h.GetClaimsFromAccess(newAccessCookie.Value)
+	if err != nil {
+		log.Printf("error getting claims from newly generated access token for %s: %v\n", clientIP, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
+	log.Printf("refreshed access for %s\n", clientIP)
 	http.SetCookie(w, newAccessCookie)
-	return &refreshClaims
+	return newAccessClaims
 }
 
 func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Request) {
+	clientIP := r.Context().Value("clientip").(string)
+	log.Printf("sending auth cookie delete request to %s\n", clientIP)
 	access := http.Cookie{
 		Name:     "access",
 		Value:    "",
@@ -480,24 +513,29 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 		Secure:   true,
 	}
 
+	// Set new cookies, trigger browser delete
+	http.SetCookie(w, &access)
+	http.SetCookie(w, &refresh)
+
 	// Remove refresh token from db
 	refreshCookie, err := r.Cookie("refresh")
-	if err == nil {
+	if err != nil {
+		log.Printf("FATAL: %s did not send refresh cookie, skipping db refresh deletion\n", clientIP)
+	} else {
 		token := refreshCookie.Value
 		claims, err := h.GetClaimsFromRefresh(token)
 		if err != nil {
 			log.Printf("error getting claims from token: %v\n", err)
+			return
 		}
-		log.Println(claims)
 		_, err = h.db.Exec(context.Background(),
 			`DELETE FROM refreshtokens WHERE account_id=$1 AND token=$2`, claims.UserID, token)
 		if err != nil {
-			log.Println("error deleting token from db")
+			log.Printf("error deleting token from db for %s: %v\n", clientIP, err)
+			return
 		}
+		log.Printf("successfully deleted refresh token from db for USERID: %d, IP: %s\n", claims.UserID, clientIP)
 	}
-
-	http.SetCookie(w, &access)
-	http.SetCookie(w, &refresh)
 }
 
 // HashPassword generates a bcrypt hash for the given password.

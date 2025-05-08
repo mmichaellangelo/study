@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -26,21 +27,29 @@ type Set struct {
 type SetHandler struct {
 	db             *pgxpool.Pool
 	accountHandler *AccountHandler
+	cardHandler    *CardHandler
 }
 
-func NewSetHandler(db *pgxpool.Pool, accountHandler *AccountHandler) *SetHandler {
-	return &SetHandler{db: db, accountHandler: accountHandler}
+type CardData struct {
+	Front pgtype.Text `json:"front"`
+	Back  pgtype.Text `json:"back"`
+}
+
+func NewSetHandler(db *pgxpool.Pool, accountHandler *AccountHandler, cardHandler *CardHandler) *SetHandler {
+	return &SetHandler{db: db, accountHandler: accountHandler, cardHandler: cardHandler}
 }
 
 var (
-	SetRE       = regexp.MustCompile((`^\/sets\/?$`))
-	SetREWithID = regexp.MustCompile(`^\/sets\/(\d+)\/?$`)
+	SetRE           = regexp.MustCompile((`^\/sets\/?$`))
+	SetREWithID     = regexp.MustCompile(`^\/sets\/(\d+)\/?$`)
+	CardREWithSetID = regexp.MustCompile(`^\/sets\/(\d+)\/?$`)
 )
 
 func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 	claims := r.Context().Value("claims").(*Claims)
 	switch {
+
 	// CREATE SET ROUTE
 	case SetRE.MatchString(url) && r.Method == http.MethodPost:
 		setID, err := h.CreateSet(claims.UserID)
@@ -71,7 +80,7 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		set, err := h.GetSetByID(setID)
+		set, err := h.GetSetByIDWithCards(setID)
 		if err != nil {
 			http.Error(w, "error getting set", http.StatusNotFound)
 			log.Printf("error getting set: %v\n", err)
@@ -99,6 +108,48 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
+		return
+
+	// INSERT CARD ROUTE
+	case CardREWithSetID.MatchString(url) && r.Method == http.MethodPost:
+		groups := CardREWithSetID.FindStringSubmatch(url)
+		if len(groups) != 2 {
+			log.Println("invalid URL")
+			http.Error(w, "invalid URL", http.StatusBadRequest)
+			return
+		}
+		set_id, err := strconv.Atoi(groups[1])
+		if err != nil {
+			log.Printf("error parsing id from url: %v\n", err)
+			http.Error(w, "invalid ID", http.StatusBadRequest)
+		}
+		var cardData CardData
+		defer r.Body.Close()
+		bytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("error reading body: %v\n", err)
+			http.Error(w, "error reading body", http.StatusBadRequest)
+			return
+		}
+		err = json.Unmarshal(bytes, &cardData)
+		if err != nil {
+			log.Printf("error unmarshalling json: %v\n", err)
+			http.Error(w, "error unmarshalling json", http.StatusBadRequest)
+			return
+		}
+		card, err := h.cardHandler.CreateCard(set_id, cardData.Front, cardData.Back)
+		if err != nil {
+			log.Printf("error creating card: %v\n", err)
+			http.Error(w, "error creating card", http.StatusInternalServerError)
+			return
+		}
+		responseBytes, err := json.Marshal(card)
+		if err != nil {
+			log.Printf("error marshalling json for response: %v\n", err)
+			http.Error(w, "error marshalling json for response", http.StatusInternalServerError)
+			return
+		}
+		w.Write(responseBytes)
 		return
 
 	default:
@@ -166,37 +217,16 @@ func (h *SetHandler) GetSetByID(set_id int) (*Set, error) {
 	return &s, nil
 }
 
-func (h *SetHandler) GetSetWithCards(set_id int) (*Set, error) {
-	// Get set info
+func (h *SetHandler) GetSetByIDWithCards(set_id int) (*Set, error) {
 	set, err := h.GetSetByID(set_id)
 	if err != nil {
 		return nil, err
 	}
-	if set == nil {
-		return nil, nil
-	}
-	// Get cards in set
-	var cards []Card
-	rows, err := h.db.Query(context.Background(),
-		`SELECT id, set_id, front, back, created
-		 FROM cards WHERE set_id=$1`, set_id)
+	cards, err := h.cardHandler.GetCardsBySetID(set_id)
 	if err != nil {
-		return nil, fmt.Errorf("error getting cards from db: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var c Card
-		err := rows.Scan(&c.ID, &c.SetID, &c.Front, &c.Back, &c.Created)
-		if err != nil {
-			return nil, fmt.Errorf("error scanning card: %w", err)
-		}
-		cards = append(cards, c)
-	}
-	if len(cards) == 0 {
-		set.Cards = nil
-	} else {
-		set.Cards = &cards
-	}
+	set.Cards = cards
 	return set, nil
 }
 

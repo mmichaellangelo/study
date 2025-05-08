@@ -18,6 +18,8 @@
                 }
             )
             const data = await res.json()
+
+            console.log(data)
             
             userState.ID = data.userid
             userState.Username = data.username
