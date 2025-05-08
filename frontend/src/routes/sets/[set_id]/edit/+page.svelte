@@ -21,6 +21,21 @@
         if (setLocal.name != setRemote.name) {
             return false
         }
+        if (setLocal.cards?.length != setRemote.cards?.length) {
+            console.log("cards")
+            return false
+        }
+        if (setLocal.cards && setRemote.cards) {
+            const localCards = setLocal.cards
+            const remoteCards = setRemote.cards
+            for (let i = 0; i < localCards.length; i++) {
+                if (localCards[i].front != remoteCards[i].front ||
+                    localCards[i].back != remoteCards[i].back
+                ) {
+                    return false
+                }
+            }
+        }
         return true
     })
 
@@ -38,6 +53,14 @@
     interface NameUpdate extends Update {
         type: "name"
         newTitle: string
+    }
+
+    var blankCard: Card = {
+        id: -1,
+        set_id: -1,
+        created: new Date(),
+        front: "",
+        back: ""
     }
 
     
@@ -58,6 +81,12 @@
             setLocal = data.set
         }
     })
+
+    function addCardLocal() {
+        if (setLocal?.cards) {
+            setLocal.cards.push(blankCard)
+        }
+    }
 
 </script>
 
@@ -83,14 +112,14 @@
             <br />
             {#if setLocal.cards}
                 {#each setLocal.cards as card, index}
-                <div class="card" draggable="true"
-                    role="listitem">
+                <div class="card" role="listitem">
                         <span>{`${index + 1}. `}</span>
                         <input type="text" bind:value={card.front} placeholder="front">
                         <input type="text" bind:value={card.back} placeholder="back">
-                        <button>-</button>
+                        <button>del</button>
                 </div>
                 {/each}
+                <button onclick={addCardLocal}>new</button>
             {/if}
         </form>
         {/if}
