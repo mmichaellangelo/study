@@ -22,7 +22,6 @@
                 success: false
             }
         }
-        console.log(res)
         const data = await res.json()
         status.loading = false
         goto(`/sets/${data.id}/edit`)

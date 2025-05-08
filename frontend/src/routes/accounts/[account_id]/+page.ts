@@ -1,6 +1,6 @@
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ params }) => {
+export const load: PageLoad = async ({ params, fetch }) => {
     try {
         const response = await fetch(`http://localhost:8080/accounts/${params.account_id}`, {
             method: "GET",
@@ -10,7 +10,6 @@ export const load: PageLoad = async ({ params }) => {
             return
         }
         const data = await response.json()
-        console.log(data)
         const createdObj = new Date(data.created)
         return {
             account: {

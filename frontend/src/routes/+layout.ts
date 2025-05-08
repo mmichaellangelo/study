@@ -3,7 +3,7 @@ import type { LayoutLoad } from "./$types"
 
 export const prerender = false
 
-export const load: LayoutLoad = async () => {
+export const load: LayoutLoad = async ({fetch}) => {
     if (userState.ID == -1) {
         try {
             const res = await fetch(`http://localhost:8080/me`,

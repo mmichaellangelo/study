@@ -1,6 +1,6 @@
 import type { PageLoad } from "./$types"
 
-export const load: PageLoad = async () => {
+export const load: PageLoad = async ({fetch}) => {
     try {
         const res = await fetch(`http://localhost:8080/sets`, {
             method: "GET",

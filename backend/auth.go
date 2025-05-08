@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var accessTokenExpiration = (time.Minute * 5)
+var accessTokenExpiration = (time.Second * 10)
 var refreshTokenExpiration = (time.Hour * 24)
 
 // Middleware to handle user auth

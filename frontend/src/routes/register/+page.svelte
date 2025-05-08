@@ -24,7 +24,6 @@ import StatusMessage from "$lib/components/StatusMessage.svelte";
                 body: formData,
                 credentials: "include",
             })
-            console.log(response)
             if (!response.ok) {
                 formStatus = {
                     loading: false,

@@ -3,12 +3,14 @@
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
 
-    let isLoading = $state(false)
-
     let { data } = $props()
 
-    let setLocal = $state<Set|undefined>(data.set)
-    let setRemote = $state<Set|undefined>(data.set)
+    let isLoading = $state(false)
+    let queue = $state<Update[]>([])
+    let isProcessingQueue = $state(false)
+    let setLocal = $state<Set|undefined>(undefined)
+    let setRemote = $state<Set|undefined>(undefined)
+
     let synced = $derived.by(() => {
         if (isProcessingQueue) {
             return false
@@ -20,10 +22,6 @@
             return false
         }
         return true
-    })
-
-    $effect(() => {
-        console.log(setLocal)
     })
 
     interface Update {
@@ -42,8 +40,7 @@
         newTitle: string
     }
 
-    let queue = $state<Update[]>([])
-    let isProcessingQueue = $state(false)
+    
 
     async function processQueue() {
         isProcessingQueue = true
@@ -64,39 +61,41 @@
 
 </script>
 
-<div id="title">
-    <h2>{setLocal?.name}</h2>
-    {#if isLoading}
-        <Loader />
-    {/if}
-    {#if synced}
-        <span>synced</span>
-    {/if}
-</div>
-
-<div id="create_frame">
-    {#if setLocal}
-    <form>
-        <label>
-            title <br />
-            <input type="text" placeholder="title" bind:value={setLocal.name}>
-        </label>
-        
-        <br />
-        {#if setLocal.cards}
-            {#each setLocal.cards as card, index}
-            <div class="card" draggable="true"
-                role="listitem">
-                    <span>{`${index + 1}. `}</span>
-                    <input type="text" bind:value={card.front} placeholder="front">
-                    <input type="text" bind:value={card.back} placeholder="back">
-                    <button>-</button>
-            </div>
-            {/each}
+{#if data.set}
+    <div id="title">
+        <h2>{setLocal?.name}</h2>
+        {#if isLoading}
+            <Loader />
         {/if}
-    </form>
-    {/if}
-</div>
+        {#if synced}
+            <span>synced</span>
+        {/if}
+    </div>
+
+    <div id="create_frame">
+        {#if setLocal}
+        <form>
+            <label>
+                title <br />
+                <input type="text" placeholder="title" bind:value={setLocal.name}>
+            </label>
+            
+            <br />
+            {#if setLocal.cards}
+                {#each setLocal.cards as card, index}
+                <div class="card" draggable="true"
+                    role="listitem">
+                        <span>{`${index + 1}. `}</span>
+                        <input type="text" bind:value={card.front} placeholder="front">
+                        <input type="text" bind:value={card.back} placeholder="back">
+                        <button>-</button>
+                </div>
+                {/each}
+            {/if}
+        </form>
+        {/if}
+    </div>
+{/if}
 
 <style>
     #title {

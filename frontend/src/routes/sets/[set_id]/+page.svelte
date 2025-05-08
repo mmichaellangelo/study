@@ -1,5 +1,13 @@
 <script lang="ts">
+    import Loader from '$lib/components/Loader.svelte';
+    import { onMount } from 'svelte';
+
     let { data } = $props()
+    let isLoading = $state(true)
+
+    onMount(() => {
+        isLoading = false
+    })
 </script>
 
 <button onclick={() => history.back()}>back</button>
@@ -29,7 +37,11 @@
     </table>
     {/if}
 {:else}
-    <p>there was an error loading the set{data.error? `: ${data.error}` : ""}</p>
+    {#if isLoading}
+        <Loader />
+    {:else}
+        <p>there was an error loading the set{data.error? `: ${data.error}` : ""}</p>
+    {/if}
 {/if}
 
 <style>
