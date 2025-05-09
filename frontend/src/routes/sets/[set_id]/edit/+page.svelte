@@ -54,7 +54,7 @@
 
     let localNewCardIndex = $state(-1)
 
-    function addCardLocal() {
+    function addCard() {
         if (setLocal) {
             const newCard: Card = {
                 id: localNewCardIndex,
@@ -65,8 +65,10 @@
             }
             if (setLocal.cards) {
             setLocal.cards.push(newCard)
+            cardsToUpdate.push(newCard.id)
             } else {
                 setLocal.cards = [newCard]
+                cardsToUpdate.push(newCard.id)
             }
             localNewCardIndex--
         }
@@ -143,9 +145,9 @@
             if (cardsToUpdate.length !== 0) {
                 u.cards = []
                 // add cards to update
-                for (let i = 0; i <= cardsToUpdate.length; i++) {
+                for (const cardID of cardsToUpdate) {
                     if (setLocal.cards) {
-                        const cardLocal = setLocal.cards.find((card) => card.id == cardsToUpdate[i])
+                        const cardLocal = setLocal.cards.find((card) => card.id == cardID)
                         console.log(cardLocal)
                         if (cardLocal && cardLocal.id < 0) {
                             // new card
@@ -157,11 +159,14 @@
                             u.cards.push(newCard)
                         } else {
                             // existing card
-                            u.cards.push({
-                                id: setLocal.cards[i].id,
-                                front: setLocal.cards[i].front || "",
-                                back: setLocal.cards[i].back || ""
+                            if (cardLocal) {
+                                u.cards.push({
+                                id: cardLocal.id,
+                                front: cardLocal.front || "",
+                                back: cardLocal.back || ""
                             })
+                            }
+                            
                         }
                     }
                 } 
@@ -183,7 +188,7 @@
                     const newRemote = await res.json() as Set
                     nameUpdate = false
                     cardsToUpdate = []
-                    console.log(newRemote)
+                    console.log("new remote: ", newRemote)
                     setRemote = newRemote
                     if (setRemote.cards && setLocal.cards) {
                         if (setLocal.cards.length == setRemote.cards.length) {
@@ -230,16 +235,16 @@
             
             <br />
             {#if setLocal.cards}
+                <label for="card">cards</label>
                 {#each setLocal.cards as card, index}
                 <div class="card" role="listitem">
-                        <span>{`${card.id}. `}</span>
                         <input type="text" placeholder="front" bind:value={card.front} oninput={() => updateCard(card.id)}>
                         <input type="text" placeholder="back" bind:value={card.back} oninput={() => updateCard(card.id)}>
                         <button>del</button>
                 </div>
                 {/each}
             {/if}
-            <button onclick={addCardLocal}>new</button>
+            <button onclick={addCard}>new</button>
         </form>
         {/if}
     </div>

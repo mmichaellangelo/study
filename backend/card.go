@@ -7,16 +7,15 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Card struct {
-	ID      int         `json:"id"`
-	SetID   int         `json:"set_id"`
-	Front   pgtype.Text `json:"front"`
-	Back    pgtype.Text `json:"back"`
-	Created time.Time   `json:"created"`
+	ID      int       `json:"id"`
+	SetID   int       `json:"set_id"`
+	Front   string    `json:"front"`
+	Back    string    `json:"back"`
+	Created time.Time `json:"created"`
 }
 
 type CardUpdate struct {
@@ -48,7 +47,7 @@ func (h *CardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 ////////////
 // CREATE
 
-func (h *CardHandler) CreateCard(set_id int, front pgtype.Text, back pgtype.Text) (*Card, error) {
+func (h *CardHandler) CreateCard(set_id int, front string, back string) (*Card, error) {
 	rows, err := h.db.Query(context.Background(),
 		`INSERT INTO cards 
 		 (set_id, front, back)

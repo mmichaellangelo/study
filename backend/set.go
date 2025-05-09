@@ -37,8 +37,8 @@ type SetHandler struct {
 }
 
 type CardData struct {
-	Front pgtype.Text `json:"front"`
-	Back  pgtype.Text `json:"back"`
+	Front string `json:"front"`
+	Back  string `json:"back"`
 }
 
 func NewSetHandler(db *pgxpool.Pool, accountHandler *AccountHandler, cardHandler *CardHandler) *SetHandler {
@@ -162,7 +162,7 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				} else {
 					// New card >> create
-					_, err := h.cardHandler.CreateCard(set_id, pgtype.Text{String: u.Front}, pgtype.Text{String: u.Back})
+					_, err := h.cardHandler.CreateCard(set_id, u.Front, u.Back)
 					log.Printf("error creating card for %s: %v\n", clientIP, err)
 				}
 			}
