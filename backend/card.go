@@ -48,12 +48,12 @@ func (h *CardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 ////////////
 // CREATE
 
-func (h *CardHandler) CreateCard(stack_id int, front pgtype.Text, back pgtype.Text) (*Card, error) {
+func (h *CardHandler) CreateCard(set_id int, front pgtype.Text, back pgtype.Text) (*Card, error) {
 	rows, err := h.db.Query(context.Background(),
 		`INSERT INTO cards 
-		 stack_id, front, back
+		 (set_id, front, back)
 		 VALUES($1, $2, $3)
-		 RETURNING id, set_id, front, back, created`, stack_id, front, back)
+		 RETURNING id, set_id, front, back, created`, set_id, front, back)
 	if err != nil {
 		return nil, fmt.Errorf("error creating card: %w", err)
 	}
@@ -73,7 +73,8 @@ func (h *CardHandler) CreateCard(stack_id int, front pgtype.Text, back pgtype.Te
 func (h *CardHandler) GetCardsBySetID(set_id int) (*[]Card, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, set_id, front, back, created
-		 FROM cards WHERE set_id=$1`, set_id)
+		 FROM cards WHERE set_id=$1
+		 ORDER BY id ASC `, set_id)
 	if err != nil {
 		return nil, err
 	}

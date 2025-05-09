@@ -3,10 +3,9 @@
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
 
-    let { data } = $props()
+    let {data} = $props()
 
     let isLoading = $state(false)
-    let queue = $state<Update[]>([])
     let isProcessingQueue = $state(false)
     let setLocal = $state<Set|undefined>(undefined)
     let setRemote = $state<Set|undefined>(undefined)
@@ -22,7 +21,6 @@
             return false
         }
         if (setLocal.cards?.length != setRemote.cards?.length) {
-            console.log("cards")
             return false
         }
         if (setLocal.cards && setRemote.cards) {
@@ -39,22 +37,6 @@
         return true
     })
 
-    interface Update {
-        type: string
-    }
-
-    interface CardUpdate extends Update {
-        type: "card"
-        id: number
-        newFront?: string
-        newBack?: string
-    }
-
-    interface NameUpdate extends Update {
-        type: "name"
-        newTitle: string
-    }
-
     var blankCard: Card = {
         id: -1,
         set_id: -1,
@@ -63,30 +45,167 @@
         back: ""
     }
 
-    
+    onMount(async () => {
+        if (data.set) {
+            setRemote = JSON.parse(JSON.stringify(data.set))
+            setLocal = JSON.parse(JSON.stringify(data.set))
+        }
+    })
 
-    async function processQueue() {
-        isProcessingQueue = true
-        
-        for (var i = 0; i < queue.length; i++) {
-            if (queue[i].type == "title") {
+    let localNewCardIndex = $state(-1)
 
+    function addCardLocal() {
+        if (setLocal) {
+            const newCard: Card = {
+                id: localNewCardIndex,
+                front: "",
+                back: "",
+                created: new Date(),
+                set_id: setLocal.id
+            }
+            if (setLocal.cards) {
+            setLocal.cards.push(newCard)
+            } else {
+                setLocal.cards = [newCard]
+            }
+            localNewCardIndex--
+        }
+    }
+
+    function debounce(func: () => void, delay: number): () => void {
+        let timeoutId: NodeJS.Timeout | null = null;
+
+        return function (): void {
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(() => {
+                func();
+                timeoutId = null;
+            }, delay);
+        };
+    }
+
+    let cardsToUpdate = $state<number[]>([])
+    let nameUpdate = $state(false)
+
+    function updateCard(id: number) {
+        console.log("update: ", id)
+        if (setLocal && setRemote && setLocal.cards && setRemote.cards) {
+            if (!cardsToUpdate.includes(id)) {
+                const cardLocal = setLocal.cards.find(card => card.id == id)
+                const cardRemote = setRemote.cards.find(card => card.id == id)
+                if (!cardLocal) {
+                    // BAD
+                    console.log("card not found")
+                    return
+                } else if (!cardRemote) {
+                    // Created!
+                    console.log("new card!")
+                    cardsToUpdate.push(id)
+                    console.log($state.snapshot(cardsToUpdate))
+                } else if (cardLocal.front == cardRemote.front &&
+                    cardLocal.back == cardRemote.back) {
+                        // card synced >> remove from update list
+                        cardsToUpdate.filter((i) => {i !== id})
+                } else {
+                    // not synced
+                    cardsToUpdate.push(id)
+                }
             }
         }
     }
 
-    onMount(async () => {
-        if (data.set) {
-            setRemote = data.set
-            setLocal = data.set
-        }
-    })
+    function updateName() {
+        nameUpdate = true
+    }
 
-    function addCardLocal() {
-        if (setLocal?.cards) {
-            setLocal.cards.push(blankCard)
+    interface CardUpdate {
+        id?: number
+        front: string
+        back: string
+    }
+
+    interface SetUpdate {
+        name?: string
+        description?: string
+        cards?: CardUpdate[]
+    }
+    
+    async function update() {
+        if (setLocal && setRemote) {
+            console.log("update")
+            var u: SetUpdate = {}
+            if (nameUpdate) {
+                // add name to update
+                u.name = setLocal.name
+            }
+            if (cardsToUpdate.length !== 0) {
+                u.cards = []
+                // add cards to update
+                for (let i = 0; i <= cardsToUpdate.length; i++) {
+                    if (setLocal.cards) {
+                        const cardLocal = setLocal.cards.find((card) => card.id == cardsToUpdate[i])
+                        console.log(cardLocal)
+                        if (cardLocal && cardLocal.id < 0) {
+                            // new card
+                            const newCard = {
+                                front: cardLocal.front || "",
+                                back: cardLocal.back || ""
+                            }
+                            console.log("adding new card: ", newCard)
+                            u.cards.push(newCard)
+                        } else {
+                            // existing card
+                            u.cards.push({
+                                id: setLocal.cards[i].id,
+                                front: setLocal.cards[i].front || "",
+                                back: setLocal.cards[i].back || ""
+                            })
+                        }
+                    }
+                } 
+            }
+                    
+            if (u.name || u.description || u.cards) {
+                try {
+                    console.log("SENDING BODY:")
+                    console.log(u)
+                    const res = await fetch(`http://localhost:8080/sets/${setRemote?.id}`, {
+                        method: "PATCH",
+                        credentials: "include",
+                        body: JSON.stringify(u)
+                    })
+                    if (!res.ok) {
+                        console.log(await res.text())
+                        return
+                    }
+                    const newRemote = await res.json() as Set
+                    nameUpdate = false
+                    cardsToUpdate = []
+                    console.log(newRemote)
+                    setRemote = newRemote
+                    if (setRemote.cards && setLocal.cards) {
+                        if (setLocal.cards.length == setRemote.cards.length) {
+                            for (let i = 0; i < setLocal.cards.length; i++) {
+                                if (setLocal.cards[i].id < 0) {
+                                    setLocal.cards[i].id = setRemote.cards[i].id
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log(e)
+                }
+            }
         }
     }
+
+    const debouncedUpdate = debounce(update, 900)
+
+    onMount(() => {
+        setInterval(debouncedUpdate, 1000)
+    })
 
 </script>
 
@@ -106,24 +225,30 @@
         <form>
             <label>
                 title <br />
-                <input type="text" placeholder="title" bind:value={setLocal.name}>
+                <input type="text" placeholder="name" bind:value={setLocal.name} oninput={updateName}>
             </label>
             
             <br />
             {#if setLocal.cards}
                 {#each setLocal.cards as card, index}
                 <div class="card" role="listitem">
-                        <span>{`${index + 1}. `}</span>
-                        <input type="text" bind:value={card.front} placeholder="front">
-                        <input type="text" bind:value={card.back} placeholder="back">
+                        <span>{`${card.id}. `}</span>
+                        <input type="text" placeholder="front" bind:value={card.front} oninput={() => updateCard(card.id)}>
+                        <input type="text" placeholder="back" bind:value={card.back} oninput={() => updateCard(card.id)}>
                         <button>del</button>
                 </div>
                 {/each}
-                <button onclick={addCardLocal}>new</button>
             {/if}
+            <button onclick={addCardLocal}>new</button>
         </form>
         {/if}
     </div>
+{:else}
+    {#if data.error}
+        <p>there was en error loading the set: {data.error}</p>
+    {:else}
+        <Loader />
+    {/if}
 {/if}
 
 <style>

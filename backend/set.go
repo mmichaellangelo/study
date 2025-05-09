@@ -157,7 +157,9 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// If card exists >> update
 				if u.ID != nil {
 					err := h.cardHandler.UpdateCard(u)
-					log.Printf("error updating card for %s: %v\n", clientIP, err)
+					if err != nil {
+						log.Printf("error updating card for %s: %v\n", clientIP, err)
+					}
 				} else {
 					// New card >> create
 					_, err := h.cardHandler.CreateCard(set_id, pgtype.Text{String: u.Front}, pgtype.Text{String: u.Back})
@@ -171,6 +173,13 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "error getting set", http.StatusInternalServerError)
 			return
 		}
+		cards, err := h.cardHandler.GetCardsBySetID(set_id)
+		if err != nil {
+			log.Printf("error getting set for %s: %v\n", clientIP, err)
+			http.Error(w, "error getting cards", http.StatusInternalServerError)
+			return
+		}
+		set.Cards = cards
 		returnBytes, err := json.Marshal(set)
 		if err != nil {
 			log.Printf("error marshalling json for %s: %v\n", clientIP, err)
@@ -312,7 +321,8 @@ func (h *SetHandler) GetSetsByAccountID(account_id int) (*[]Set, error) {
 	// Get sets
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, account_id, name, description, created
-		 FROM sets WHERE account_id=$1`, account_id)
+		 FROM sets WHERE account_id=$1
+		 ORDER BY id DESC`, account_id)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning sets: %w", err)
 	}
