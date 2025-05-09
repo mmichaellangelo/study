@@ -241,6 +241,29 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write(responseBytes)
 		return
 
+	// DELETE SET ROUTE
+	case SetREWithID.MatchString(url) && r.Method == http.MethodDelete:
+		groups := SetREWithID.FindStringSubmatch(url)
+		if len(groups) != 2 {
+			log.Printf("%s made bad request url: %s\n", clientIP, url)
+			http.Error(w, "bad request URL", http.StatusBadRequest)
+			return
+		}
+		set_id, err := strconv.Atoi(groups[1])
+		if err != nil {
+			log.Printf("%s error parsing id from url: %s, %v\n", clientIP, url, err)
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		err = h.DeleteSet(set_id)
+		if err != nil {
+			log.Printf("%s error deleting set: %v\n", clientIP, err)
+			http.Error(w, "error deleting set", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+
 	default:
 		return
 	}

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { invalidate } from "$app/navigation";
+    import { goto, invalidate } from "$app/navigation";
     import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
@@ -93,7 +93,6 @@
     let nameUpdate = $state(false)
 
     function updateCard(id: number) {
-        console.log("update: ", id)
         if (setLocal && setRemote && setLocal.cards && setRemote.cards) {
             if (!cardsToUpdate.includes(id)) {
                 const cardLocal = setLocal.cards.find(card => card.id == id)
@@ -119,15 +118,12 @@
 
     function deleteCard(id: number) {
         if (setLocal && setRemote) {
-            console.log("delete card ", id)
             // delete from local and cardsToUpdate
             cardsToUpdate = cardsToUpdate.filter(cardID => cardID !== id)
             setLocal.cards = setLocal?.cards?.filter(card => card.id !== id)
             if (setRemote?.cards?.find(card => card.id == id)) {
                 // Is in remote >> add to cardsToDelete
-                console.log("IS IN REMOTE")
                 if (!cardsToDelete.includes(id)) {
-                    console.log("ADDING TO CARDSTODELETE")
                     cardsToDelete.push(id)
                 }
             }
@@ -154,7 +150,6 @@
     
     async function update() {
         if (setLocal && setRemote) {
-            console.log("update")
             var u: SetUpdate = {}
             if (nameUpdate) {
                 // add name to update
@@ -166,7 +161,6 @@
                 for (const cardID of cardsToUpdate) {
                     if (setLocal.cards) {
                         const cardLocal = setLocal.cards.find((card) => card.id == cardID)
-                        console.log($state.snapshot(cardLocal))
                         if (cardLocal && cardLocal.id < 0) {
                             // new card
                             const newCard: CardUpdate = {
@@ -174,7 +168,6 @@
                                 front: cardLocal.front || "",
                                 back: cardLocal.back || ""
                             }
-                            console.log("adding new card: ", newCard)
                             u.cards.push(newCard)
                         } else {
                             // existing card
@@ -204,8 +197,6 @@
             if (u.name || u.description || u.cards.length > 0) {
                 try {
                     isLoading = true
-                    console.log("SENDING BODY:")
-                    console.log(u)
                     const res = await fetch(`http://localhost:8080/sets/${setRemote?.id}`, {
                         method: "PATCH",
                         credentials: "include",
@@ -221,7 +212,6 @@
                     nameUpdate = false
                     cardsToUpdate = []
                     cardsToDelete = []
-                    console.log("new remote: ", newRemote)
                     setRemote = newRemote
                     if (setRemote.cards && setLocal.cards) {
                         if (setLocal.cards.length == setRemote.cards.length) {
@@ -247,10 +237,43 @@
         setInterval(debouncedUpdate, 1000)
     })
 
+    let dialogElement = $state<HTMLDialogElement>()
+
+    function showDialog() {
+        dialogElement?.showModal()
+    }
+
+    function closeDialog() {
+        dialogElement?.close()
+    }
+
+    async function deleteSet() {
+        try {
+            const res = await fetch(`http://localhost:8080/sets/${data.set?.id}`, {
+                method: "DELETE",
+                credentials: "include",
+            })
+            if (!res.ok) {
+                console.log(await res.text())
+                return
+            }
+            goto("/study")
+        } catch (e) {
+            console.log(e)
+        }
+    }
+
 </script>
 
 {#if data.set}
+    <dialog bind:this={dialogElement}>
+        <p>are you sure you want to delete this set?</p>
+        <button onclick={deleteSet}>yes</button>
+        <button onclick={closeDialog}>no</button>
+    </dialog>
+
     <a href={`/sets/${data.set.id}`}>back</a>
+    <button onclick={showDialog}>delete set</button>
     <div id="title">
         <h2>{setLocal?.name}</h2>
         {#if isLoading}
@@ -293,6 +316,16 @@
 {/if}
 
 <style>
+    dialog {
+        position: absolute;
+        background-color: var(--col-purplegrey);
+        color: var(--col-lightpink)
+    }
+
+    ::backdrop {
+        background-color: black;
+        opacity: 0.5;
+    }
     #title {
         display: flex;
         flex-direction: row;
