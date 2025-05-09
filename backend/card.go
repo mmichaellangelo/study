@@ -19,9 +19,10 @@ type Card struct {
 }
 
 type CardUpdate struct {
-	ID    *int   `json:"id"`
-	Front string `json:"front"`
-	Back  string `json:"back"`
+	ID    *int    `json:"id"`
+	Front *string `json:"front"`
+	Back  *string `json:"back"`
+	Type  string  `json:"type"`
 }
 
 type CardHandler struct {
@@ -97,6 +98,18 @@ func (h *CardHandler) UpdateCard(u CardUpdate) error {
 	_, err := h.db.Exec(context.Background(),
 		`UPDATE cards SET front=$1, back=$2
 		 WHERE id=$3`, u.Front, u.Back, u.ID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+////////////
+// DELETE
+
+func (h *CardHandler) DeleteCard(card_id int) error {
+	_, err := h.db.Exec(context.Background(),
+		`DELETE FROM cards WHERE id=$1`, card_id)
 	if err != nil {
 		return err
 	}

@@ -154,16 +154,26 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if update.Cards != nil {
 			// update/create cards
 			for _, u := range *update.Cards {
-				// If card exists >> update
-				if u.ID != nil {
+				switch u.Type {
+				case "create":
+					if u.Front != nil && u.Back != nil {
+						_, err := h.cardHandler.CreateCard(set_id, *u.Front, *u.Back)
+						log.Printf("error creating card for %s: %v\n", clientIP, err)
+					}
+
+				case "update":
 					err := h.cardHandler.UpdateCard(u)
 					if err != nil {
 						log.Printf("error updating card for %s: %v\n", clientIP, err)
 					}
-				} else {
-					// New card >> create
-					_, err := h.cardHandler.CreateCard(set_id, u.Front, u.Back)
-					log.Printf("error creating card for %s: %v\n", clientIP, err)
+
+				case "delete":
+					if u.ID != nil {
+						err := h.cardHandler.DeleteCard(*u.ID)
+						if err != nil {
+							log.Printf("error deleting card for %s: %v\n", clientIP, err)
+						}
+					}
 				}
 			}
 		}

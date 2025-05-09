@@ -1,19 +1,18 @@
 <script lang="ts">
+    import { invalidate } from "$app/navigation";
     import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
 
     let {data} = $props()
 
-    let isLoading = $state(false)
-    let isProcessingQueue = $state(false)
+    
     let setLocal = $state<Set|undefined>(undefined)
     let setRemote = $state<Set|undefined>(undefined)
 
+    let isLoading = $state(true)
+
     let synced = $derived.by(() => {
-        if (isProcessingQueue) {
-            return false
-        }
         if (setLocal === undefined || setRemote === undefined) {
             return false
         }
@@ -46,6 +45,7 @@
     }
 
     onMount(async () => {
+        isLoading = false
         if (data.set) {
             setRemote = JSON.parse(JSON.stringify(data.set))
             setLocal = JSON.parse(JSON.stringify(data.set))
@@ -89,6 +89,7 @@
     }
 
     let cardsToUpdate = $state<number[]>([])
+    let cardsToDelete = $state<number[]>([])
     let nameUpdate = $state(false)
 
     function updateCard(id: number) {
@@ -99,13 +100,11 @@
                 const cardRemote = setRemote.cards.find(card => card.id == id)
                 if (!cardLocal) {
                     // BAD
-                    console.log("card not found")
+                    console.log("VERY BAD card not found idk you're on your own")
                     return
                 } else if (!cardRemote) {
-                    // Created!
-                    console.log("new card!")
+                    // new card
                     cardsToUpdate.push(id)
-                    console.log($state.snapshot(cardsToUpdate))
                 } else if (cardLocal.front == cardRemote.front &&
                     cardLocal.back == cardRemote.back) {
                         // card synced >> remove from update list
@@ -118,14 +117,33 @@
         }
     }
 
+    function deleteCard(id: number) {
+        if (setLocal && setRemote) {
+            console.log("delete card ", id)
+            // delete from local and cardsToUpdate
+            cardsToUpdate = cardsToUpdate.filter(cardID => cardID !== id)
+            setLocal.cards = setLocal?.cards?.filter(card => card.id !== id)
+            if (setRemote?.cards?.find(card => card.id == id)) {
+                // Is in remote >> add to cardsToDelete
+                console.log("IS IN REMOTE")
+                if (!cardsToDelete.includes(id)) {
+                    console.log("ADDING TO CARDSTODELETE")
+                    cardsToDelete.push(id)
+                }
+            }
+        }
+        
+    }
+
     function updateName() {
         nameUpdate = true
     }
 
     interface CardUpdate {
+        type: "create" | "update" | "delete"
         id?: number
-        front: string
-        back: string
+        front?: string
+        back?: string
     }
 
     interface SetUpdate {
@@ -142,16 +160,17 @@
                 // add name to update
                 u.name = setLocal.name
             }
+            u.cards = []
             if (cardsToUpdate.length !== 0) {
-                u.cards = []
                 // add cards to update
                 for (const cardID of cardsToUpdate) {
                     if (setLocal.cards) {
                         const cardLocal = setLocal.cards.find((card) => card.id == cardID)
-                        console.log(cardLocal)
+                        console.log($state.snapshot(cardLocal))
                         if (cardLocal && cardLocal.id < 0) {
                             // new card
-                            const newCard = {
+                            const newCard: CardUpdate = {
+                                type: "create",
                                 front: cardLocal.front || "",
                                 back: cardLocal.back || ""
                             }
@@ -161,9 +180,10 @@
                             // existing card
                             if (cardLocal) {
                                 u.cards.push({
-                                id: cardLocal.id,
-                                front: cardLocal.front || "",
-                                back: cardLocal.back || ""
+                                    type: "update",
+                                    id: cardLocal.id,
+                                    front: cardLocal.front || "",
+                                    back: cardLocal.back || ""
                             })
                             }
                             
@@ -171,9 +191,19 @@
                     }
                 } 
             }
+
+            if (cardsToDelete.length !== 0) {
+                for (const id of cardsToDelete) {
+                    u.cards?.push({
+                        type: "delete",
+                        id: id,
+                    })
+                }
+            }
                     
-            if (u.name || u.description || u.cards) {
+            if (u.name || u.description || u.cards.length > 0) {
                 try {
+                    isLoading = true
                     console.log("SENDING BODY:")
                     console.log(u)
                     const res = await fetch(`http://localhost:8080/sets/${setRemote?.id}`, {
@@ -183,11 +213,14 @@
                     })
                     if (!res.ok) {
                         console.log(await res.text())
+                        isLoading = false
                         return
                     }
+                    await invalidate((url) => url.pathname === `/sets/${data.set?.id}`)
                     const newRemote = await res.json() as Set
                     nameUpdate = false
                     cardsToUpdate = []
+                    cardsToDelete = []
                     console.log("new remote: ", newRemote)
                     setRemote = newRemote
                     if (setRemote.cards && setLocal.cards) {
@@ -199,8 +232,10 @@
                             }
                         }
                     }
+                    isLoading = false
                 } catch (e) {
                     console.log(e)
+                    isLoading = false
                 }
             }
         }
@@ -215,6 +250,7 @@
 </script>
 
 {#if data.set}
+    <a href={`/sets/${data.set.id}`}>back</a>
     <div id="title">
         <h2>{setLocal?.name}</h2>
         {#if isLoading}
@@ -240,7 +276,7 @@
                 <div class="card" role="listitem">
                         <input type="text" placeholder="front" bind:value={card.front} oninput={() => updateCard(card.id)}>
                         <input type="text" placeholder="back" bind:value={card.back} oninput={() => updateCard(card.id)}>
-                        <button>del</button>
+                        <button onclick={() => deleteCard(card.id)}>del</button>
                 </div>
                 {/each}
             {/if}

@@ -10,7 +10,7 @@
     })
 </script>
 
-<button onclick={() => history.back()}>back</button>
+<a href="/study">back</a>
 
 {#if data.set}
     <h3>{data.set.name}</h3>
