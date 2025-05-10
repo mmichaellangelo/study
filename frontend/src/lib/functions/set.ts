@@ -1,3 +1,4 @@
+import { API } from "$lib/api"
 import type { Card, Set } from "$lib/types/types"
 
 export interface CardUpdate {
@@ -13,7 +14,7 @@ export interface SetUpdate {
 
 export async function UpdateSet(setID: number, updateData: SetUpdate): Promise<Set> {
     try {
-        const res = await fetch(`http://localhost:8080/sets/${setID}`, {
+        const res = await fetch(`http://${API}/sets/${setID}`, {
             method: "PATCH",
             credentials: "include",
             headers: {

@@ -1,9 +1,10 @@
+import { API } from "$lib/api";
 import type { Set } from "$lib/types/types";
 import type { LayoutLoad } from "./$types";
 
 export const load: LayoutLoad = async ({ params, fetch }) => {
     try {
-        const res = await fetch(`http://localhost:8080/sets/${params.set_id}`, {
+        const res = await fetch(`http://${API}/sets/${params.set_id}`, {
             method: "GET",
             credentials: "include",
             

@@ -1,3 +1,4 @@
+import { API } from "$lib/api"
 import { userState } from "$lib/state/account.svelte"
 import type { LayoutLoad } from "./$types"
 
@@ -6,7 +7,7 @@ export const prerender = false
 export const load: LayoutLoad = async ({fetch}) => {
     if (userState.ID == -1) {
         try {
-            const res = await fetch(`http://localhost:8080/me`,
+            const res = await fetch(`http://${API}/me`,
                 {
                     method: "GET",
                     credentials: "include",

@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func InitDBPool(ctx context.Context) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, "postgres://mike:password@localhost:5432/db")
+	DB := os.Getenv("DB")
+	pool, err := pgxpool.New(ctx, fmt.Sprintf("postgres://mike:password@%s/db", DB))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %v", err)
 	}

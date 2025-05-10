@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { API } from "$lib/api";
     import Loader from "$lib/components/Loader.svelte";
     import StatusMessage from "$lib/components/StatusMessage.svelte";
     import { GotoReload } from "$lib/functions/navigation";
@@ -20,7 +21,7 @@
         const formData = new FormData(form)
 
         try {
-            const response = await fetch("http://localhost:8080/login", {
+            const response = await fetch(`http://${API}/login`, {
                 method: "POST",
                 body: formData,
                 credentials: "include"

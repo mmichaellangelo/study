@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { API } from '$lib/api.js';
     import { GotoReload } from '$lib/functions/navigation.js';
     import { onMount } from 'svelte';
 
@@ -8,7 +9,7 @@
 
     onMount(async () => {
         try {
-        const response = await fetch("http://localhost:8080/logout", {
+        const response = await fetch(`http://${API}/logout`, {
             method: "POST",
             credentials: "include",
         })

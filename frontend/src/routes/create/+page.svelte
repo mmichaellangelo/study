@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
+    import { API } from "$lib/api";
     import Loader from "$lib/components/Loader.svelte";
     import StatusMessage from "$lib/components/StatusMessage.svelte";
     import type { StatusMessageData } from "$lib/types/types";
@@ -11,7 +12,7 @@
         success: false
     })
     onMount(async () => {
-        const res = await fetch("http://localhost:8080/sets/", {
+        const res = await fetch(`http://${API}/sets/`, {
             method: "POST",
             credentials: "include",
         })

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto, invalidate } from "$app/navigation";
+    import { API } from "$lib/api.js";
     import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
@@ -197,7 +198,7 @@
             if (u.name || u.description || u.cards.length > 0) {
                 try {
                     isLoading = true
-                    const res = await fetch(`http://localhost:8080/sets/${setRemote?.id}`, {
+                    const res = await fetch(`http://${API}/sets/${setRemote?.id}`, {
                         method: "PATCH",
                         credentials: "include",
                         body: JSON.stringify(u)
@@ -249,7 +250,7 @@
 
     async function deleteSet() {
         try {
-            const res = await fetch(`http://localhost:8080/sets/${data.set?.id}`, {
+            const res = await fetch(`http://${API}/sets/${data.set?.id}`, {
                 method: "DELETE",
                 credentials: "include",
             })

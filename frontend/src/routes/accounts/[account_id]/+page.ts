@@ -1,8 +1,9 @@
+import { API } from "$lib/api";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ params, fetch }) => {
     try {
-        const response = await fetch(`http://localhost:8080/accounts/${params.account_id}`, {
+        const response = await fetch(`http://${API}/accounts/${params.account_id}`, {
             method: "GET",
             credentials: "include",
         })
