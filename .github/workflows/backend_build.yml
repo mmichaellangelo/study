@@ -42,5 +42,6 @@ jobs:
           script: |
             cd ~/disco/
             curl -sO https://raw.githubusercontent.com/mmichaellangelo/study/refs/heads/master/compose.prod.yml
+            curl -sO https://raw.githubusercontent.com/mmichaellangelo/study/refs/heads/master/nginx.conf
             docker compose -f compose.prod.yml pull
             docker compose -f compose.prod.yml up -d --force-recreate

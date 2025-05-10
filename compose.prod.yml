@@ -1,10 +1,19 @@
 services:
+  proxy:
+    image: nginx:stable-alpine
+    volumes: 
+      - /etc/letsencrypt/live/disco-api.duckdns.org/:/disco/ssl
+      - /disco/nginx.conf:/etc/nginx/nginx.conf
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
   api:
     container_name: api
     image: ghcr.io/mmichaellangelo/study/api:latest
     env_file: .env
-    ports:
-    - "8080:8080"
+    restart: unless-stopped
+    expose: 8080
   db:
     image: postgres:latest 
     container_name: postgres_db 
@@ -12,14 +21,13 @@ services:
       POSTGRES_USER: mike 
       POSTGRES_PASSWORD: password 
       POSTGRES_DB: db 
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data 
       - type: bind
         source: ./SCHEMA.sql
         target: /docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped 
+    expose: 5432
 
 volumes:
   postgres_data: 
