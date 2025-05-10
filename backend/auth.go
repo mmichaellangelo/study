@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/mail"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -70,8 +71,9 @@ var (
 func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 
-	// Enable CORS for development
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+	ORIGIN := os.Getenv("ORIGIN")
+
+	w.Header().Set("Access-Control-Allow-Origin", ORIGIN)
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 
