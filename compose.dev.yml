@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: backend
+      target: dev
+    ports:
+      - "8080:8080"
+  db:
+    image: postgres:latest # Use the official PostgreSQL image. Consider pinning to a specific version (e.g., postgres:15) for production.
+    container_name: postgres_db # Optional: Assigns a specific name to the container
+    environment:
+      POSTGRES_USER: mike # Sets the default superuser and database owner
+      POSTGRES_PASSWORD: password # Sets the password for the default superuser
+      POSTGRES_DB: db # Optional: Creates a database named 'app_db' automatically on startup. Change or remove if needed.
+    ports:
+      - "5432:5432" # Maps port 5173 on the host machine to port 5432 inside the container
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Mounts a named volume to persist database data
+      - type: bind
+        source: ./SCHEMA.sql
+        target: /docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped # Configures the container to restart automatically unless manually stopped
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    ports:
+      - "8000:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres_data: # Defines the named volume used by the db service
+    driver: local

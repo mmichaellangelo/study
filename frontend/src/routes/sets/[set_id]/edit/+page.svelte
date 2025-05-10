@@ -257,6 +257,7 @@
                 console.log(await res.text())
                 return
             }
+            await invalidate((url) => url.pathname === `/study`)
             goto("/study")
         } catch (e) {
             console.log(e)

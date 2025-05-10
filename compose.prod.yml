@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: backend
+      target: prod
+    ports:
+      - "8080:8080"
+  db:
+    image: postgres:latest 
+    container_name: postgres_db 
+    environment:
+      POSTGRES_USER: mike 
+      POSTGRES_PASSWORD: password 
+      POSTGRES_DB: db 
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data 
+      - type: bind
+        source: ./SCHEMA.sql
+        target: /docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped 
+
+volumes:
+  postgres_data: 
+    driver: local

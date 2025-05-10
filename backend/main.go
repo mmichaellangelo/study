@@ -6,17 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Get environment
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("error loading .env file")
-	}
-
 	ACCESS_SECRET := os.Getenv("ACCESS_SECRET")
 	REFRESH_SECRET := os.Getenv("REFRESH_SECRET")
 

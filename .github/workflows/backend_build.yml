@@ -1,0 +1,46 @@
+name: Build disco backend
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push api image
+        uses: docker/build-push-action@v4
+        with:
+          context: backend
+          target: prod
+          push: true
+          tags: |
+            ghcr.io/mmichaellangelo/study/api:latest
+            ghcr.io/mmichaellangelo/study/api:${{ github.sha }}
+      
+      - name: SSH into server, update
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd ~/disco/
+            curl -sO https://raw.githubusercontent.com/mmichaellangelo/study/refs/heads/master/compose.prod.yml
+            docker compose -f compose.prod.yml pull
+            docker compose -f compose.prod.yml up -d --force-recreate

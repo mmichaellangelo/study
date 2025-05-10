@@ -1,4 +1,4 @@
-module mykale/study-backend
+module mykale/disco-backend
 
 go 1.24.2
 
