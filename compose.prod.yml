@@ -4,7 +4,7 @@ services:
     volumes: 
       - /etc/letsencrypt/live/disco-api.duckdns.org/:/disco/ssl
       - type: bind
-        source: /disco/nginx.conf
+        source: ./nginx.conf
         target: /etc/nginx/nginx.conf
     restart: unless-stopped
     ports:
