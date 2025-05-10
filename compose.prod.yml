@@ -13,7 +13,8 @@ services:
     image: ghcr.io/mmichaellangelo/study/api:latest
     env_file: .env
     restart: unless-stopped
-    expose: 8080
+    expose:
+      - "8080"
   db:
     image: postgres:latest 
     container_name: postgres_db 
@@ -27,7 +28,8 @@ services:
         source: ./SCHEMA.sql
         target: /docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped 
-    expose: 5432
+    expose: 
+      - "5432"
 
 volumes:
   postgres_data: 
