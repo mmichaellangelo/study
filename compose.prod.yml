@@ -1,10 +1,9 @@
 services:
   api:
-    build:
-      context: backend
-      target: prod
+    container_name: api
+    image: ghcr.io/mmichaellangelo/study/api:latest
     ports:
-      - "8080:8080"
+    - "8080:8080"
   db:
     image: postgres:latest 
     container_name: postgres_db 
