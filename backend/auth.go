@@ -285,7 +285,7 @@ func (h *AuthMiddleware) GenerateAccessCookie(userid int, username string) (*htt
 		Path:     "/",
 		Expires:  accessClaims.ExpiresAt.Time,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		Secure:   true,
 	}
 	return &accessCookie, nil
@@ -311,7 +311,7 @@ func (h *AuthMiddleware) GenerateRefreshCookie(userid int, username string) (*ht
 		Path:     "/",
 		Expires:  refreshClaims.ExpiresAt.Time,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		Secure:   true,
 	}
 	// Add refresh token to database
@@ -502,7 +502,7 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		Secure:   true,
 	}
 
@@ -512,7 +512,7 @@ func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Reques
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		Secure:   true,
 	}
 
