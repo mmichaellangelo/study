@@ -3,7 +3,7 @@ services:
     image: nginx:stable-alpine
     volumes: 
       - /etc/letsencrypt/live/disco-api.duckdns.org/fullchain.pem:/ssl/fullchain.pem
-      - /etc/letsencrypt/live/disco-api.duckdns.org/fullchain.pem:/ssl/privkey.pem
+      - /etc/letsencrypt/live/disco-api.duckdns.org/privkey.pem:/ssl/privkey.pem
       - /root/disco/nginx.conf:/etc/nginx/nginx.conf
     restart: unless-stopped
     ports:
