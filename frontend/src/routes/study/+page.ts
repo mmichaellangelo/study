@@ -3,7 +3,7 @@ import type { PageLoad } from "./$types"
 
 export const load: PageLoad = async ({fetch}) => {
     try {
-        const res = await fetch(`http://${API}/sets`, {
+        const res = await fetch(`${API}/sets`, {
             method: "GET",
             credentials: "include",
         })

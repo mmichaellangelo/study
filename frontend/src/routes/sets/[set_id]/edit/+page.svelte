@@ -198,7 +198,7 @@
             if (u.name || u.description || u.cards.length > 0) {
                 try {
                     isLoading = true
-                    const res = await fetch(`http://${API}/sets/${setRemote?.id}`, {
+                    const res = await fetch(`${API}/sets/${setRemote?.id}`, {
                         method: "PATCH",
                         credentials: "include",
                         body: JSON.stringify(u)
@@ -250,7 +250,7 @@
 
     async function deleteSet() {
         try {
-            const res = await fetch(`http://${API}/sets/${data.set?.id}`, {
+            const res = await fetch(`${API}/sets/${data.set?.id}`, {
                 method: "DELETE",
                 credentials: "include",
             })

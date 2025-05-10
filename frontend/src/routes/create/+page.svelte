@@ -12,7 +12,7 @@
         success: false
     })
     onMount(async () => {
-        const res = await fetch(`http://${API}/sets/`, {
+        const res = await fetch(`${API}/sets/`, {
             method: "POST",
             credentials: "include",
         })

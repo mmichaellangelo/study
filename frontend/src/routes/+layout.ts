@@ -7,7 +7,7 @@ export const prerender = false
 export const load: LayoutLoad = async ({fetch}) => {
     if (userState.ID == -1) {
         try {
-            const res = await fetch(`http://${API}/me`,
+            const res = await fetch(`${API}/me`,
                 {
                     method: "GET",
                     credentials: "include",

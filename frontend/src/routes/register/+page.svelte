@@ -20,7 +20,7 @@ import StatusMessage from "$lib/components/StatusMessage.svelte";
         const form = event.target as HTMLFormElement
         const formData = new FormData(form)
         try {
-            const response = await fetch(`http://${API}/register`, {
+            const response = await fetch(`${API}/register`, {
                 method: "POST",
                 body: formData,
                 credentials: "include",
