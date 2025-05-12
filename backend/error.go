@@ -24,10 +24,13 @@ const (
 	RefreshTokenInvalidated ErrCode = "REFRESH_TOKEN_INVALIDATED"
 	BadAuthHeader           ErrCode = "BAD_AUTH_HEADER"
 	BadClaims               ErrCode = "BAD_CLAIMS"
+	PasswordIncorrect       ErrCode = "PASSWORD_INCORRECT"
 
-	InternalError ErrCode = "INTERNAL_ERROR"
-
-	DatabaseError ErrCode = "DATABASE_ERROR"
+	// General Errors
+	NotFound        ErrCode = "NOT_FOUND"
+	IllegalArgument ErrCode = "ILLEGAL_ARGUMENT"
+	InternalError   ErrCode = "INTERNAL_ERROR"
+	DatabaseError   ErrCode = "DATABASE_ERROR"
 )
 
 /////////////////////

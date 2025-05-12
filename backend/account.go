@@ -120,56 +120,56 @@ Creates a new account
 			BadEmail if email address cannot be parsed
 			InternalError error for an internal error
 */
-func (h *AccountHandler) CreateAccount(email string, username string, password string) (userID int, ae *AppError) {
+func (h *AccountHandler) CreateAccount(email string, username string, password string) (account *Account, ae *AppError) {
 	// Check that email, username, and password are not blank
 	if strings.TrimSpace(email) == "" ||
 		strings.TrimSpace(username) == "" ||
 		strings.TrimSpace(password) == "" {
-		return 0, NewAppError(BadRegistrationInfo, "blank username, email, or password")
+		return nil, NewAppError(BadRegistrationInfo, "blank username, email, or password")
 	}
 	// Hash password
 	hashed, err := HashPassword(password)
 	if err != nil {
-		return 0, NewAppError(InternalError, err)
+		return nil, NewAppError(InternalError, err)
 	}
 	// Validate email address
 	_, err = mail.ParseAddress(email)
 	if err != nil {
-		return 0, NewAppError(BadEmail, err)
+		return nil, NewAppError(BadEmail, err)
 	}
 	// Check that email is unique
 	acc, err := h.GetAccountByEmail(email)
 	if err != nil {
-		return 0, NewAppError(InternalError, err)
+		return nil, NewAppError(InternalError, err)
 	}
 	if acc != nil {
-		return 0, NewAppError(AccountWithEmailExists, nil)
+		return nil, NewAppError(AccountWithEmailExists, nil)
 	}
 	// Check that username is unique
 	acc, err = h.GetAccountByUsername(username)
 	if err != nil {
-		return 0, NewAppError(InternalError, err)
+		return nil, NewAppError(InternalError, err)
 	}
 	if acc != nil {
-		return 0, NewAppError(AccountWithUsernameExists, nil)
+		return nil, NewAppError(AccountWithUsernameExists, nil)
 	}
 	// Add account to database
 	rows, err := h.db.Query(context.Background(),
 		`INSERT INTO accounts (email, username, password)
 		 VALUES($1, $2, $3)
-		 RETURNING id`, email, username, hashed)
+		 RETURNING id, email, username, picture, bio created`, email, username, hashed)
 	if err != nil {
-		return -1, NewAppError(DatabaseError, err)
+		return nil, NewAppError(DatabaseError, err)
 	}
 	if !rows.Next() {
-		return -1, NewAppError(DatabaseError, fmt.Errorf("unknown error occurred while inserting account into database"))
+		return nil, NewAppError(DatabaseError, fmt.Errorf("unknown error occurred while inserting account into database"))
 	}
-	var accID int
-	err = rows.Scan(&accID)
+	var a Account
+	err = rows.Scan(&a.ID, &a.Email, &a.Username, &a.Picture, &a.Bio, &a.Created)
 	if err != nil {
-		return -1, NewAppError(DatabaseError, err)
+		return nil, NewAppError(DatabaseError, err)
 	}
-	return accID, nil
+	return &a, nil
 }
 
 //////////
