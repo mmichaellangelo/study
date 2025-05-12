@@ -81,7 +81,6 @@ func (ae *AppError) Unwrap() error {
 type ErrorResponse struct {
 	HttpStatus int     `json:"-"`
 	ErrCode    ErrCode `json:"errcode,omitempty"`
-	Message    string  `json:"errmsg,omitempty"`
 	Err        error   `json:"-"`
 }
 

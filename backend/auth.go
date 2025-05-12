@@ -289,6 +289,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// Extracts token string from Authorization header
 func (h *AuthMiddleware) GetAuthTokenFromHeader(r *http.Request) (string, *AppError) {
 	authHeader := r.Header.Get("Authorization")
 	if !AuthorizationHeaderRe.MatchString(authHeader) {
@@ -301,7 +302,7 @@ func (h *AuthMiddleware) GetAuthTokenFromHeader(r *http.Request) (string, *AppEr
 	return groups[1], nil
 }
 
-// Validates login credentials, returns refresh and access tokens
+// Validates login credentials, stores refresh and returns tokens
 func (h *AuthMiddleware) Login(emailOrUsername string, password string) (*AccessTokens, *AppError) {
 	if strings.TrimSpace(emailOrUsername) == "" || strings.TrimSpace(password) == "" {
 		return nil, NewAppError(IllegalArgument, "email or username is blank")

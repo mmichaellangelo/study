@@ -6,7 +6,25 @@ export const API = PUBLIC_API_ADDRESS
 ////////////
 // SCHEMA
 
-const ErrorType = z.enum([""])
+const ErrCodeSchema = z.enum([
+    "ACCOUNT_EMAIL_EXISTS", 
+    "ACCOUNT_USERNAME_EXISTS", 
+    "BAD_REGISTRATION_INFO", 
+    "BAD_EMAIL", 
+    "NO_ACCESS_TOKEN", 
+    "NO_REFRESH_TOKEN", 
+    "TOKEN_EXPIRED", 
+    "TOKEN_INVALID", 
+    "REFRESH_TOKEN_INVALIDATED", 
+    "BAD_AUTH_HEADER", 
+    "BAD_CLAIMS", 
+    "PASSWORD_INCORRECT", 
+    "NOT_FOUND", 
+    "ILLEGAL_ARGUMENT", 
+    "INTERNAL_ERROR", 
+    "DATABASE_ERROR"
+])
+type ErrCode = z.infer<typeof ErrCodeSchema>
 
 const RefreshResponseOKSchema = z.object({
     refresh: z.string().min(1),
@@ -14,32 +32,29 @@ const RefreshResponseOKSchema = z.object({
 })
 type RefreshResponseOK = z.infer<typeof RefreshResponseOKSchema>
 
-const RefreshResponseErrorSchema = z.object({
-    error: z.object({
-        type: z.string().,
-        message: z.string()
-    })
+const ErrorResponseSchema = z.object({
+    errcode: ErrCodeSchema,
 })
-type RefreshResponseError = z.infer<typeof RefreshResponseErrorSchema>
+type ErrorResponse = z.infer<typeof ErrorResponseSchema>
 
-function getAccessToken() {
+function getAccessLocal() {
     return localStorage.getItem("access")
 }
 
-function getRefreshToken() {
+function getRefreshLocal() {
     return localStorage.getItem("refresh")
 }
 
-function setAccessToken(token: string) {
+function setAccessLocal(token: string) {
     localStorage.setItem("access", token)
 }
 
-function setRefreshToken(token: string) {
+function setRefreshLocal(token: string) {
     localStorage.setItem("refresh", token)
 }
 
 export async function refreshAccess(): Promise<boolean> {
-    const currentRefresh = getRefreshToken()
+    const currentRefresh = getRefreshLocal()
     try {
         const res = await fetch(`${API}/auth/refresh`, {
             method: "POST",
@@ -51,11 +66,16 @@ export async function refreshAccess(): Promise<boolean> {
             return false
         }
         const data: unknown = await res.json()
-        const valid = RefreshResponseSchema.safeParse(data)
+        const valid = RefreshResponseOKSchema.safeParse(data)
         if (valid.success) {
-            setAccessToken(valid.data.access)
-            setRefreshToken(valid.data.refresh)
+            setAccessLocal(valid.data.access)
+            setRefreshLocal(valid.data.refresh)
             return true
+        } else {
+            const valid = ErrorResponseSchema.safeParse(data)
+            if (valid.success) {
+                console.log(valid.data.errcode)
+            }
         }
         return false
     } catch(e) {
@@ -68,7 +88,7 @@ export async function apiFetch(path: string, method: string) {
         await fetch(`${API}/${path}`, {
             method: method,
             headers: {
-                "Authorization": `Bearer ${"<<TOKEN>>"}`
+                "Authorization": `Bearer ${getAccessLocal()}`
             }
         })
     } catch(e) {
