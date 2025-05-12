@@ -9,7 +9,7 @@
 
     onMount(async () => {
         try {
-        const response = await fetch(`${API}/logout`, {
+        const response = await fetch(`${API}/auth/logout`, {
             method: "POST",
             credentials: "include",
         })

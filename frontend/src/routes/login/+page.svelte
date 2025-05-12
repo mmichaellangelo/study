@@ -21,7 +21,7 @@
         const formData = new FormData(form)
 
         try {
-            const response = await fetch(`${API}/login`, {
+            const response = await fetch(`${API}/auth/login`, {
                 method: "POST",
                 body: formData,
                 credentials: "include"

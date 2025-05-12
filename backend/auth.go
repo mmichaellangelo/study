@@ -18,7 +18,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var accessTokenExpiration = (time.Second * 10)
+var accessTokenExpiration = (time.Minute * 5)
 var refreshTokenExpiration = (time.Hour * 24)
 
 // Middleware to handle user auth
@@ -44,6 +44,11 @@ type AuthDetails struct {
 	Password string
 }
 
+type AccessTokens struct {
+	Access  string `json:"access"`
+	Refresh string `json:"refresh"`
+}
+
 // Creates a new Auth Middleware
 func NewAuthMiddleware(handlerToWrap http.Handler,
 	db *pgxpool.Pool, accountHandler *AccountHandler,
@@ -61,11 +66,19 @@ func NewAuthMiddleware(handlerToWrap http.Handler,
 // ROUTES
 
 var (
-	LoginPathRE     = regexp.MustCompile(`^\/login\/?$`)
-	LogoutPathRE    = regexp.MustCompile(`\/logout\/?$`)
-	RegisterPathRE  = regexp.MustCompile(`^\/register\/?$`)
-	IdentityRouteRE = regexp.MustCompile(`^\/me\/?$`)
+	LoginPathRE     = regexp.MustCompile(`^\/auth\/login\/?$`)
+	LogoutPathRE    = regexp.MustCompile(`\/auth\/logout\/?$`)
+	RegisterPathRE  = regexp.MustCompile(`^\/auth\/register\/?$`)
+	IdentityRouteRE = regexp.MustCompile(`^\/auth\/me\/?$`)
+	RefreshRouteRE  = regexp.MustCompile(`^\/auth\/refresh\/?$`)
+
+	AuthorizationHeaderRe = regexp.MustCompile(`^Bearer (.+)$`)
 )
+
+type contextKey string
+
+const clientIPKey contextKey = "clientIP"
+const claimsKey contextKey = "claims"
 
 // HTTP Routes
 func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +96,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("%s %s %s\n", clientIP, r.Method, url)
-	ctx := context.WithValue(r.Context(), "clientip", clientIP)
+	ctx := context.WithValue(r.Context(), clientIPKey, clientIP)
 	r = r.WithContext(ctx)
 
 	// Handle OPTIONS preflight requests
@@ -94,16 +107,67 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+
+	// REFRESH ROUTE
+	case RefreshRouteRE.MatchString(url) && r.Method == http.MethodPost:
+		currentRefresh, ae := h.GetAuthTokenFromHeader(r)
+		if ae != nil {
+			re := NewErrorResponse(http.StatusBadRequest, ae.Code, ae.Err)
+			re.LogAndWrite(w, r)
+			return
+		}
+		ae = h.VerifyRefresh(currentRefresh)
+		if ae != nil {
+			if ae.Code == InternalError {
+				er := NewErrorResponse(http.StatusUnauthorized, InternalError, ae.Err)
+				er.LogAndWrite(w, r)
+				return
+			} else {
+				er := NewErrorResponse(http.StatusUnauthorized, ae.Code, ae.Err)
+				er.LogAndWrite(w, r)
+				return
+			}
+		}
+		accessTokens, ae := h.RefreshAccess(currentRefresh)
+		if ae != nil {
+			er := NewErrorResponse(http.StatusUnauthorized, ae.Code, ae.Err)
+			er.LogAndWrite(w, r)
+			return
+		}
+		bytes, err := json.Marshal(accessTokens)
+		if err != nil {
+			er := NewErrorResponse(http.StatusInternalServerError, InternalError, err)
+			er.LogAndWrite(w, r)
+			return
+		}
+		w.Write(bytes)
+		return
+
 	// IDENTITY ROUTE
 	case IdentityRouteRE.MatchString(url) && r.Method == http.MethodGet:
 		log.Printf("Handled identity route for %s\n", clientIP)
-		claims := h.RefreshAccess(w, r)
+		access, ae := h.GetAuthTokenFromHeader(r)
+		if ae != nil {
+			er := NewErrorResponse(http.StatusBadRequest, ae.Code, ae.Err)
+			er.LogAndWrite(w, r)
+			return
+		}
+		claims, ae := h.GetClaimsFromAccess(access)
+		if ae != nil {
+			er := NewErrorResponse(http.StatusUnauthorized, ae.Code, ae.Err)
+			er.LogAndWrite(w, r)
+			return
+		}
 		if claims == nil {
+			er := NewErrorResponse(http.StatusBadRequest, BadClaims, fmt.Errorf("nil claims"))
+			er.LogAndWrite(w, r)
 			return
 		}
 		data, err := json.Marshal(claims)
 		if err != nil {
-			http.Error(w, "error marshalling json", http.StatusInternalServerError)
+			er := NewErrorResponse(http.StatusInternalServerError, InternalError, err)
+			er.LogAndWrite(w, r)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
@@ -114,7 +178,8 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Handled register route for %s\n", clientIP)
 		err := r.ParseMultipartForm(0)
 		if err != nil {
-			http.Error(w, "error parsing form", http.StatusBadRequest)
+			er := NewErrorResponse(http.StatusBadRequest, InternalError, err)
+			er.LogAndWrite(w, r)
 			return
 		}
 		// Validate parameters
@@ -124,14 +189,22 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(email) == "" ||
 			strings.TrimSpace(username) == "" ||
 			strings.TrimSpace(password) == "" {
-			http.Error(w, "invalid email/username/password", http.StatusBadRequest)
+			er := NewErrorResponse(http.StatusBadRequest, BadRegistrationInfo, errors.New("bad email, username, and/or password"))
+			er.LogAndWrite(w, r)
 			return
 		}
 		// Create account
-		userID, err := h.accountHandler.CreateAccount(email, username, password)
-		if err != nil || userID < 0 {
-			http.Error(w, fmt.Sprintf("error creating account: %v", err), http.StatusInternalServerError)
-			return
+		userID, ae := h.accountHandler.CreateAccount(email, username, password)
+		if ae != nil {
+			switch {
+			case ae.Code == BadRegistrationInfo:
+				er := NewErrorResponse(http.StatusBadRequest, ae.Code, ae.Err)
+				er.LogAndWrite(w, r)
+			case ae.Code == AccountWithEmailExists || ae.Code == AccountWithUsernameExists:
+				er := NewErrorResponse(http.StatusForbidden, ae.Code, ae.Err)
+				er.LogAndWrite(w, r)
+				return
+			}
 		}
 		// Login
 		h.SetAuthCookies(w, r, userID, username)
@@ -170,16 +243,39 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// RESTRICTED ROUTE
 	default:
 		log.Printf("Handled restricted route for %s\n", clientIP)
-		claims := h.RefreshAccess(w, r)
-		if claims == nil {
+		access, err := h.GetAuthTokenFromHeader(r)
+		if err != nil {
+			ae, ok := err.(*AppError)
+			if ok {
+				er := NewErrorResponse(http.StatusUnauthorized, BadAuthHeader, ae.Err)
+				er.LogAndWrite(w, r)
+				return
+			}
+		}
+		claims, err := h.GetClaimsFromAccess(access)
+		if err != nil {
+			er := NewErrorResponse(http.StatusUnauthorized, BadClaims, err)
+			er.LogAndWrite(w, r)
 			return
 		}
-		ctx := context.WithValue(r.Context(), "claims", claims)
+		ctx := context.WithValue(r.Context(), claimsKey, claims)
 		r = r.WithContext(ctx)
 		h.next.ServeHTTP(w, r)
 		return
 	}
 
+}
+
+func (h *AuthMiddleware) GetAuthTokenFromHeader(r *http.Request) (string, *AppError) {
+	authHeader := r.Header.Get("Authorization")
+	if !AuthorizationHeaderRe.MatchString(authHeader) {
+		return "", NewAppError(BadAuthHeader, "auth header bad format, does not match regex format")
+	}
+	groups := AuthorizationHeaderRe.FindStringSubmatch(authHeader)
+	if len(groups) != 2 {
+		return "", NewAppError(BadAuthHeader, "auth header bad format, more than 2 regex groups")
+	}
+	return groups[1], nil
 }
 
 // Sets both refresh and access cookies
@@ -329,46 +425,46 @@ func (h *AuthMiddleware) GenerateRefreshCookie(userid int, username string) (*ht
 func isTokenValid(token *jwt.Token) error {
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		if claims.ExpiresAt.Time.Before(time.Now()) {
-			return fmt.Errorf("token is expired")
+			return NewAppError(TokenExpired, nil)
 		}
 		return nil
 	} else {
-		return fmt.Errorf("invalid token")
+		return NewAppError(TokenInvalid, nil)
 	}
 }
 
-func (h *AuthMiddleware) VerifyAccessToken(tokenString string) error {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+func (h *AuthMiddleware) VerifyAccess(tokenString string) error {
+	var claims Claims
+	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(h.accessSecret), nil
 	})
-	if err != nil {
-		return err
-	}
-	err = isTokenValid(token)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (h *AuthMiddleware) VerifyRefreshToken(tokenString string) error {
+func (h *AuthMiddleware) VerifyRefresh(tokenString string) *AppError {
 	var claims Claims
-	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(h.refreshSecret), nil
 	})
 	if err != nil {
-		return err
-	}
-	err = isTokenValid(token)
-	if err != nil {
-		return err
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
+			return NewAppError(TokenExpired, err)
+		case errors.Is(err, jwt.ErrTokenInvalidClaims) || errors.Is(err, jwt.ErrInvalidType):
+			return NewAppError(BadClaims, err)
+		default:
+			return NewAppError(InternalError, err)
+		}
 	}
 	// Check that refresh token exists in database
 	rows, err := h.db.Query(context.Background(),
 		`SELECT token FROM refreshtokens
 		 WHERE account_id=$1`, claims.UserID)
 	if err != nil {
-		return err
+		return NewAppError(DatabaseError, err)
 	}
 	defer rows.Close()
 	found := false
@@ -376,7 +472,7 @@ func (h *AuthMiddleware) VerifyRefreshToken(tokenString string) error {
 		var t string
 		err := rows.Scan(&t)
 		if err != nil {
-			return err
+			return NewAppError(DatabaseError, err)
 		}
 		if t == tokenString {
 			found = true
@@ -384,97 +480,66 @@ func (h *AuthMiddleware) VerifyRefreshToken(tokenString string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("token has been invalidated")
+		return NewAppError(RefreshTokenInvalidated, "given refresh token has been invalidated")
 	}
 	return nil
 }
 
-func (h *AuthMiddleware) GetClaimsFromRefresh(tokenString string) (*Claims, error) {
+func (h *AuthMiddleware) GetClaimsFromRefresh(tokenString string) (*Claims, *AppError) {
 	var claims Claims
-	token, err := jwt.ParseWithClaims(tokenString, &claims, func(t *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
 		return []byte(h.refreshSecret), nil
 	})
 	if err != nil {
-		return nil, err
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
+			return nil, NewAppError(TokenExpired, err)
+		default:
+			return nil, NewAppError(InternalError, err)
+		}
 	}
 	err = isTokenValid(token)
 	if err != nil {
-		return nil, err
+		return nil, NewAppError(TokenInvalid, err)
 	}
 	return &claims, nil
 }
 
-func (h *AuthMiddleware) GetClaimsFromAccess(tokenString string) (*Claims, error) {
+func (h *AuthMiddleware) GetClaimsFromAccess(tokenString string) (*Claims, *AppError) {
 	var claims Claims
-	token, err := jwt.ParseWithClaims(tokenString, &claims, func(t *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
 		return []byte(h.accessSecret), nil
 	})
 	if err != nil {
-		return nil, err
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
+			return nil, &AppError{Code: TokenExpired, Err: err}
+		default:
+			return nil, &AppError{Code: InternalError, Err: err}
+		}
 	}
 	err = isTokenValid(token)
 	if err != nil {
-		return nil, err
+		return nil, NewAppError(TokenInvalid, err)
 	}
 	return &claims, nil
 }
 
-func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (claims *Claims) {
-	clientIP := r.Context().Value("clientip").(string)
-	// Check if access token is still valid
-	currentAccessCookie, _ := r.Cookie("access")
-	if currentAccessCookie != nil {
-		access := currentAccessCookie.Value
-		var accessClaims Claims
-		currentAccess, err := jwt.ParseWithClaims(access, &accessClaims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(h.accessSecret), nil
-		})
-		switch {
-		case currentAccess.Valid:
-			// Valid token >> continue request returning userID
-			return &accessClaims
-		case errors.Is(err, jwt.ErrTokenExpired):
-			// Token expired >> continue to refresh
-		default:
-			// Error other than token expired >> unauthorized
-			log.Printf("error parsing access claims for %s: %v\n", clientIP, err)
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return nil
-		}
-	}
-
-	refreshCookie, _ := r.Cookie("refresh")
-	if refreshCookie == nil {
-		// Remove cookies, unauthorized
-		log.Printf("%s did not provide refresh token\n", clientIP)
-		h.DeleteAuthCookies(w, r)
-		w.WriteHeader(http.StatusUnauthorized)
-		return nil
-	}
-
-	var refreshClaims Claims
-	_, err := jwt.ParseWithClaims(refreshCookie.Value, &refreshClaims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(h.refreshSecret), nil
-	})
+// Returns new access token
+func (h *AuthMiddleware) RefreshAccess(currentRefresh string) (*AccessTokens, *AppError) {
+	claims, err := h.GetClaimsFromRefresh(currentRefresh)
 	switch {
 	case err == nil:
 		break
 	case errors.Is(err, jwt.ErrTokenExpired):
-		log.Printf("%s provided an expired refresh token\n", clientIP)
-		h.DeleteAuthCookies(w, r)
-		w.WriteHeader(http.StatusUnauthorized)
-		return nil
+		return nil, NewAppError(TokenExpired, err)
 	default:
-		log.Printf("error parsing refresh token for %s: %v\n", clientIP, err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return nil
+		return nil, NewAppError(InternalError, err)
 	}
 
-	err = h.VerifyRefreshToken(refreshCookie.Value)
+	err = h.VerifyRefresh(currentRefresh)
 	if err != nil {
-		log.Printf("%s provided invalid refresh token: %v\n", clientIP, err)
-		h.DeleteAuthCookies(w, r)
-		return nil
+		return nil, err
 	}
 	newAccessCookie, err := h.GenerateAccessCookie(refreshClaims.UserID, refreshClaims.Username)
 	if err != nil {
@@ -493,52 +558,17 @@ func (h *AuthMiddleware) RefreshAccess(w http.ResponseWriter, r *http.Request) (
 	return newAccessClaims
 }
 
-func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Request) {
-	clientIP := r.Context().Value("clientip").(string)
-	log.Printf("sending auth cookie delete request to %s\n", clientIP)
-	access := http.Cookie{
-		Name:     "access",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
-		Secure:   true,
-	}
-
-	refresh := http.Cookie{
-		Name:     "refresh",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
-		Secure:   true,
-	}
-
-	// Set new cookies, trigger browser delete
-	http.SetCookie(w, &access)
-	http.SetCookie(w, &refresh)
-
-	// Remove refresh token from db
-	refreshCookie, err := r.Cookie("refresh")
+func (h *AuthMiddleware) DeleteRefreshFromDB(token string) error {
+	claims, err := h.GetClaimsFromRefresh(token)
 	if err != nil {
-		log.Printf("%s did not send refresh cookie\n", clientIP)
-	} else {
-		token := refreshCookie.Value
-		claims, err := h.GetClaimsFromRefresh(token)
-		if err != nil {
-			log.Printf("error getting claims from token: %v\n", err)
-			return
-		}
-		_, err = h.db.Exec(context.Background(),
-			`DELETE FROM refreshtokens WHERE account_id=$1 AND token=$2`, claims.UserID, token)
-		if err != nil {
-			log.Printf("error deleting token from db for %s: %v\n", clientIP, err)
-			return
-		}
-		log.Printf("successfully deleted refresh token from db for USERID: %d, IP: %s\n", claims.UserID, clientIP)
+		return &AppError{Code: DatabaseError, Err: err}
 	}
+	_, err = h.db.Exec(context.Background(),
+		`DELETE FROM refreshtokens WHERE account_id=$1 AND token=$2`, claims.UserID, token)
+	if err != nil {
+		return &AppError{Code: DatabaseError, Err: err}
+	}
+	return nil
 }
 
 // HashPassword generates a bcrypt hash for the given password.

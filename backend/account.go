@@ -103,38 +103,55 @@ func getAccountIDFromURL(url string) (int, error) {
 ////////////
 // CREATE
 
-func (h *AccountHandler) CreateAccount(email string, username string, password string) (userID int, err error) {
+/*
+Creates a new account
+
+	Params:
+		email: email address
+		username: username
+		password: password unhashed
+
+	Returns:
+		userID: id of newly created account or -1 if not successful
+		err:
+			BadRegistrationInfo if email, username, and/or password are empty or all whitespace
+			AccountWithEmailExists if an account with the given email already exists
+			AccountWithUsernameExists if an account with the given username already exists
+			BadEmail if email address cannot be parsed
+			InternalError error for an internal error
+*/
+func (h *AccountHandler) CreateAccount(email string, username string, password string) (userID int, ae *AppError) {
 	// Check that email, username, and password are not blank
 	if strings.TrimSpace(email) == "" ||
 		strings.TrimSpace(username) == "" ||
 		strings.TrimSpace(password) == "" {
-		return -1, fmt.Errorf("empty email, username, and/or password")
+		return 0, NewAppError(BadRegistrationInfo, "blank username, email, or password")
 	}
 	// Hash password
 	hashed, err := HashPassword(password)
 	if err != nil {
-		return -1, fmt.Errorf("error hashing password: %w", err)
+		return 0, NewAppError(InternalError, err)
 	}
 	// Validate email address
 	_, err = mail.ParseAddress(email)
 	if err != nil {
-		return -1, fmt.Errorf("invalid email")
+		return 0, NewAppError(BadEmail, err)
 	}
 	// Check that email is unique
 	acc, err := h.GetAccountByEmail(email)
 	if err != nil {
-		return -1, fmt.Errorf("error checking if account is unique: %w", err)
+		return 0, NewAppError(InternalError, err)
 	}
 	if acc != nil {
-		return -1, fmt.Errorf("account with given email already exists")
+		return 0, NewAppError(AccountWithEmailExists, nil)
 	}
 	// Check that username is unique
-	acc, err = h.GetAccountByUsername(email)
+	acc, err = h.GetAccountByUsername(username)
 	if err != nil {
-		return -1, fmt.Errorf("error checking if account is unique: %w", err)
+		return 0, NewAppError(InternalError, err)
 	}
 	if acc != nil {
-		return -1, fmt.Errorf("account with given username already exists")
+		return 0, NewAppError(AccountWithUsernameExists, nil)
 	}
 	// Add account to database
 	rows, err := h.db.Query(context.Background(),
@@ -142,15 +159,15 @@ func (h *AccountHandler) CreateAccount(email string, username string, password s
 		 VALUES($1, $2, $3)
 		 RETURNING id`, email, username, hashed)
 	if err != nil {
-		return -1, fmt.Errorf("error inserting account into database: %w", err)
+		return -1, NewAppError(DatabaseError, err)
 	}
 	if !rows.Next() {
-		return -1, fmt.Errorf("error inserting account into database: %w", err)
+		return -1, NewAppError(DatabaseError, fmt.Errorf("unknown error occurred while inserting account into database"))
 	}
 	var accID int
 	err = rows.Scan(&accID)
 	if err != nil {
-		return -1, fmt.Errorf("error scanning rows: %w", err)
+		return -1, NewAppError(DatabaseError, err)
 	}
 	return accID, nil
 }
