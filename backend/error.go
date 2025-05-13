@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -51,7 +52,7 @@ func NewAppError(code ErrCode, err any) *AppError {
 		} else if e, ok := err.(string); ok {
 			return &AppError{
 				Code: code,
-				Err:  fmt.Errorf(e),
+				Err:  errors.New(e),
 			}
 		} else {
 			return &AppError{

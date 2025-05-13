@@ -41,6 +41,7 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             cd ~/disco/
+            rm -f compose.prod.yml nginx.conf SCHEMA.sql
             curl -sO https://raw.githubusercontent.com/mmichaellangelo/study/refs/heads/master/compose.prod.yml
             curl -sO https://raw.githubusercontent.com/mmichaellangelo/study/refs/heads/master/nginx.conf
             curl -sO https://raw.githubusercontent.com/mmichaellangelo/study/refs/heads/master/SCHEMA.sql

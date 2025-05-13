@@ -13,15 +13,15 @@ export const load: LayoutLoad = async ({fetch}) => {
                     credentials: "include",
                 }
             )
-            const data = await res.json()            
+            if (!res.ok) {
+                console.log(await res.json())
+                userState.ID = -1
+                userState.Username = ""
+                return
+            }   
+            const data = await res.json()      
             userState.ID = data.userid
             userState.Username = data.username
-            return {
-                account: {
-                    id: data.userid,
-                    username: data.username
-                }
-            }
             
         } catch (e) {
             userState.ID = -1

@@ -56,9 +56,10 @@ func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
 		username := r.FormValue("username")
 		password := r.FormValue("password")
-		_, err = h.CreateAccount(email, username, password)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("error creating account: %v", err), http.StatusBadRequest)
+		_, ae := h.CreateAccount(email, username, password)
+		if ae != nil {
+			er := NewErrorResponse(http.StatusInternalServerError, ae.Code, ae.Err)
+			er.LogAndWrite(w, r)
 			return
 		}
 		w.WriteHeader(http.StatusCreated)

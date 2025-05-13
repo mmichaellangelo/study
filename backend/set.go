@@ -53,7 +53,7 @@ var (
 
 func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
-	claims := r.Context().Value(claimsKey).(*Claims)
+	claims := r.Context().Value(claimsKey).(*AccountClaims)
 	clientIP := r.Context().Value(clientIPKey).(string)
 
 	switch {

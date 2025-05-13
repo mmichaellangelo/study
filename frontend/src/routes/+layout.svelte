@@ -6,7 +6,7 @@
     import "$lib/styles/global.css"
     import { onMount } from "svelte";
 
-	let { children } = $props()
+	let { children, data } = $props()
 
 
 </script>

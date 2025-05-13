@@ -1,11 +1,13 @@
 import { PUBLIC_API_ADDRESS } from '$env/static/public'
 import { z } from 'zod'
+import { jwtDecode } from 'jwt-decode'
 
 export const API = PUBLIC_API_ADDRESS
 
 ////////////
 // SCHEMA
 
+// AppError codes
 const ErrCodeSchema = z.enum([
     "ACCOUNT_EMAIL_EXISTS", 
     "ACCOUNT_USERNAME_EXISTS", 
@@ -24,18 +26,26 @@ const ErrCodeSchema = z.enum([
     "INTERNAL_ERROR", 
     "DATABASE_ERROR"
 ])
-type ErrCode = z.infer<typeof ErrCodeSchema>
+export type ErrCode = z.infer<typeof ErrCodeSchema>
 
-const RefreshResponseOKSchema = z.object({
-    refresh: z.string().min(1),
-    access: z.string().min(1),
-})
-type RefreshResponseOK = z.infer<typeof RefreshResponseOKSchema>
-
+// Schema for error response, should always include errcode
 const ErrorResponseSchema = z.object({
     errcode: ErrCodeSchema,
 })
 type ErrorResponse = z.infer<typeof ErrorResponseSchema>
+
+const RefreshResponseSchema = z.object({
+    refresh: z.string().min(1),
+    access: z.string().min(1),
+})
+type RefreshResponse = z.infer<typeof RefreshResponseSchema>
+
+const ClaimsSchema = z.object({
+    userid: z.number(),
+    username: z.string(),
+    exp: z.number(),
+})
+type Claims = z.infer<typeof ClaimsSchema>
 
 function getAccessLocal() {
     return localStorage.getItem("access")
@@ -62,20 +72,18 @@ export async function refreshAccess(): Promise<boolean> {
                 "Authorization": `Bearer ${currentRefresh}`
             }
         })
-        if (!res.ok) {
-            return false
-        }
         const data: unknown = await res.json()
-        const valid = RefreshResponseOKSchema.safeParse(data)
-        if (valid.success) {
-            setAccessLocal(valid.data.access)
-            setRefreshLocal(valid.data.refresh)
-            return true
-        } else {
+        if (!res.ok) {
             const valid = ErrorResponseSchema.safeParse(data)
             if (valid.success) {
                 console.log(valid.data.errcode)
             }
+        }
+        const valid = RefreshResponseSchema.safeParse(data)
+        if (valid.success) {
+            setAccessLocal(valid.data.access)
+            setRefreshLocal(valid.data.refresh)
+            return true
         }
         return false
     } catch(e) {
@@ -83,15 +91,43 @@ export async function refreshAccess(): Promise<boolean> {
     }
 }
 
-export async function apiFetch(path: string, method: string) {
-    try {
-        await fetch(`${API}/${path}`, {
-            method: method,
-            headers: {
-                "Authorization": `Bearer ${getAccessLocal()}`
+export async function apiFetchWithRefresh(path: string, method: string, body: any): Promise<Response> {
+    const res = await fetch(`${API}/${path}`, {
+        method: method,
+        headers: {
+            "Authorization": `Bearer ${getAccessLocal()}`
+        },
+        body: JSON.stringify(body)
+    }) 
+    if (!res.ok) {
+        const body = res.json() as unknown
+        const parse = ErrorResponseSchema.safeParse(body)
+        if (parse.success) {
+            if (parse.data.errcode == "TOKEN_EXPIRED") {
+                const refreshed = await refreshAccess()
+                if (!refreshed) {
+                    return res
+                }
+            } else {
+                return res
             }
-        })
-    } catch(e) {
+        }
+    }
+    return res
+}
 
+export function isAccessValid() {
+    const access = getAccessLocal()
+    if (!access || access == "") {
+        return false
+    }
+    const d = jwtDecode(access) as unknown
+    const c = ClaimsSchema.safeParse(d)
+    if (c.success) {
+        const timeDiff = Date.now() - c.data.exp
+        if (timeDiff < 0) {
+            return false
+        }
+        return true
     }
 }
