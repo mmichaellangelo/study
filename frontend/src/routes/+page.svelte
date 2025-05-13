@@ -3,42 +3,59 @@
 
 </script>
 
-<div id="hero">
-    <h2>studying should be fun!</h2>
-    <span>disco is a free study app to help you learn anything</span>
-    <p><a class="linkbutton" href="/register">make a free account</a> to join the party</p>
-    <div id="hero_card_left"></div>
-    <div id="hero_card_right"></div>
+<div id="parent">
+    <div id="hero">
+        <h2>studying should be fun!</h2>
+        <span>disco is a free study app to help you learn anything</span>
+        <p><a class="linkbutton" href="/register">make a free account</a> to join the party</p>
+        <div id="hero_card_left"></div>
+        <div id="hero_card_right"></div>
+    </div>
 </div>
 
 
 <style>
-    @keyframes fun-border {
-        0% {
-            background-color: var(--col-darkblue);
-            border-radius: 2rem;
+    @keyframes herointro {
+        from {
             border: 2px solid var(--col-purplegrey);
             box-shadow: 0px 0px 10px var(--col-lightpink);
-        }
-
-        100% {
-            border-radius: '';
-            border: '';
+            transform: rotateX(15deg) rotateY(10deg);
         }
     }
 
+    #parent {
+        perspective: 1000px;
+    }
+
     #hero {
+        perspective: 100px;
+        position: relative;
         display: flex;
         flex-direction: column;
         align-items: center;
-        background-color: var(--col-purplegrey);
+        background-color: transparent;
         width: fit-content;
+        max-width: 70%;
         padding: 1rem;
         margin-left: auto;
         margin-right: auto;
         border-radius: 1rem;
         border: 2px solid var(--col-lightblue);
-        animation: 0.5s ease-out normal fun-border;
+        animation: 0.5s ease-out forwards herointro;
+        box-sizing: border-box;
+        z-index: 0;
+    }
+
+    #hero::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--col-purplegrey);
+        border-radius: inherit;
+        z-index: -1;
     }
 
     @keyframes fadefromblue {
@@ -63,41 +80,44 @@
         animation: 0.5s fadeup;
     }
 
+    #hero_card_left, #hero_card_right {
+        padding: 0px;
+        margin: 0px;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: transparent;
+        border: 2px solid var(--col-lightpink);
+        border-radius: 1rem;
+        opacity: 0;
+    }
+
+    #hero_card_left {
+        animation: 0.5s 0.1s ease forwards cardleft;
+        z-index: -2;
+    }
+
+    #hero_card_right {
+        animation: 0.5s 0.1s ease forwards cardright;
+        z-index: -3;
+    }
+
     @keyframes cardleft {
         to {
-            transform: translateX(-5rem);
-            rotate: -10deg;
-            border-radius: 2rem;
+            translate: -1rem 1rem;
+            rotate: -3deg;
             opacity: 0.5;
         }
     }
 
-    #hero_card_left {
-        position: absolute;
-        z-index: -1;
-        width: 20rem;
-        height: 10rem;
-        background-color: var(--col-lightblue);
-        animation: 0.5s ease forwards cardleft;
-    }
-
     @keyframes cardright {
         to {
-            translate: 3rem 1rem;
-            rotate: 7deg;
-            border-radius: 2rem;
+            translate: 1rem 1rem;
+            rotate: 2deg;
             opacity: 0.7;
         }
-    }
-
-    #hero_card_right {
-        opacity: 0;
-        position: absolute;
-        z-index: -1;
-        width: 20rem;
-        height: 10rem;
-        background-color: var(--col-lightblue);
-        animation: 0.5s ease forwards cardright;
     }
 
 </style>
