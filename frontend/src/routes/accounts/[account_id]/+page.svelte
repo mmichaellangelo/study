@@ -9,14 +9,23 @@
     })
 </script>
 <h2>account</h2>
-{#if loading}
-    <p>loading...</p>
-{:else}
-    {#if data.account}
-        <p>{data.account.username}</p>
-        <p>{data.account.email}</p>
-        <p>created {data.account.created?.toLocaleString().toLowerCase()}</p>
+<div id="account_body">
+    {#if loading}
+        <p>loading...</p>
     {:else}
-        <p>error getting account</p>
+        {#if data.account}
+            <p>username: {data.account.username}</p>
+            <p>email: {data.account.email}</p>
+            <p>created: {data.account.created?.toLocaleString().toLowerCase()}</p>
+        {:else}
+            <p>error getting account</p>
+        {/if}
     {/if}
-{/if}
+</div>
+
+<style>
+    #account_body {
+        padding: 1rem;
+        padding-top: 0rem;
+    }
+</style>

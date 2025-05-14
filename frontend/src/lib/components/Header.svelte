@@ -12,7 +12,7 @@
 
 <div id="header">
     <div id="title_user_container">
-        <a href="/">
+        <a href={userState.ID !== -1 ? "/study" : "/"}>
             <h1>disco</h1>
         </a>
         <div id="user_container">
@@ -29,18 +29,18 @@
             {/if}
         </div>
     </div>
-    <nav>
-        <a href="/study">study</a>
-        <a href="/create">create</a>
-        <a href="/explore">explore</a>
-    </nav>
+    <!-- <nav> -->
+        <!-- <a href="/study">study</a> -->
+        <!-- <a href="/create">create</a> -->
+        <!-- <a href="/explore">explore</a> -->
+    <!-- </nav> -->
 </div>
 
 
 
 <style>
     #header {
-        background-color: var(--col-purplegrey);
+        background: linear-gradient(0deg,rgba(0,0,0,0) 0%, var(--col-purplegrey) 80%);
         padding: 1rem;
     }
 
@@ -55,7 +55,13 @@
     }
 
     h1 {
-        color: var(--col-lightpink);
+        background: linear-gradient(0deg, var(--col-darkpink) 0%, var(--col-lightpink) 80%);
+        color: transparent;
+        background-clip: text;
+        font-family: var(--ff-notable);
+        font-size: 28pt;
+        margin-top: 0px;
+        margin-bottom: 1rem;
     }
 </style>
 

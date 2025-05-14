@@ -38,7 +38,7 @@
                     message: `login success! redirecting...`,
                     success: true,
                 }
-                setTimeout(() => { GotoReload("/") }, 1000)
+                setTimeout(() => { GotoReload("/study") }, 1000)
             }
             
         } catch (e: any) {

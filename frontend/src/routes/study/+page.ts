@@ -1,4 +1,6 @@
+import { page } from "$app/state"
 import { API } from "$lib/api"
+import type { Set } from "$lib/types/types"
 import type { PageLoad } from "./$types"
 
 export const load: PageLoad = async ({fetch}) => {
@@ -11,7 +13,7 @@ export const load: PageLoad = async ({fetch}) => {
             return { sets: null }
         }
         return {
-            sets: await res.json()
+            sets: await res.json() as Set[]
         }
     } catch (e) {
         console.log(e)

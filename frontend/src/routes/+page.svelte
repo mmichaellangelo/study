@@ -1,12 +1,11 @@
 <script lang="ts">
-    import { goto } from "$app/navigation";
 
 </script>
 
 <div id="parent">
     <div id="hero">
         <h2>studying should be fun!</h2>
-        <span>disco is a free study app to help you learn anything</span>
+        <span>disco is a study app to help you learn anything</span>
         <p><a class="linkbutton" href="/register">make a free account</a> to join the party</p>
         <div id="hero_card_left"></div>
         <div id="hero_card_right"></div>
@@ -65,7 +64,8 @@
     }
 
     #hero>h2 {
-        color: var(--col-lightpink);
+        /* font-family: var(--ff-fugaz); */
+        color: var(--col-darkpink);
         animation: 0.5s fadefromblue;
     }
 
@@ -78,6 +78,7 @@
 
     #hero>span, #hero>p {
         animation: 0.5s fadeup;
+        text-shadow: 0px 0px 8px rgb(0, 0, 0);
     }
 
     #hero_card_left, #hero_card_right {
@@ -89,17 +90,18 @@
         width: 100%;
         height: 100%;
         background-color: transparent;
-        border: 2px solid var(--col-lightpink);
         border-radius: 1rem;
         opacity: 0;
     }
 
     #hero_card_left {
+        border: 2px solid rgb(0, 255, 204);
         animation: 0.5s 0.1s ease forwards cardleft;
         z-index: -2;
     }
 
     #hero_card_right {
+        border: 2px solid rgb(217, 255, 0);
         animation: 0.5s 0.1s ease forwards cardright;
         z-index: -3;
     }
