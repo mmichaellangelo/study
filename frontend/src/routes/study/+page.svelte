@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { goto } from '$app/navigation';
+
 
     let { data } = $props()
 
@@ -6,7 +8,7 @@
 
 <div id="title">
     <h2>my study sets</h2>
-    <button>create a new set</button>
+    <button onclick={() => goto("/create")}>create a new set</button>
 </div>
 
 <div id="set_list">
@@ -33,7 +35,6 @@
         display: flex;
         flex-direction: column;
         max-width: 40rem;
-        padding: 1rem;
     }
 
     .set {
@@ -42,8 +43,10 @@
         flex-direction: row;
         align-items: left;
         padding: 0.7rem;
+        padding-left: 1.4rem;
+        padding-right: 1.4rem;
         margin-bottom: 0.5rem;
-        border-radius: 0.5rem;
+        border-radius: 2rem;
         background-color: var(--col-purplegrey);
         color: var(--col-lightpink);
     }
@@ -56,7 +59,6 @@
     button {
         width: fit-content;
         margin-left: auto;
-        margin-right: 1rem;
         margin-bottom: 0.5rem;
     }
 </style>

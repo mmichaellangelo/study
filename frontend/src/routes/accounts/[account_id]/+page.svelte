@@ -8,6 +8,7 @@
         loading = false
     })
 </script>
+<a href="/study">back</a>
 <h2>account</h2>
 <div id="account_body">
     {#if loading}

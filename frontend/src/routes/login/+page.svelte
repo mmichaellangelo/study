@@ -85,13 +85,13 @@
         margin-right: 1rem;
     }
     form {
-        display: flex;
+        display: block;
         flex-direction: column;
-        text-align: right;
+        text-align: left;
         width: fit-content;
     }
     button {
         width: fit-content;
-        margin-left: auto;
+        margin-top: 0.5rem;
     }
 </style>

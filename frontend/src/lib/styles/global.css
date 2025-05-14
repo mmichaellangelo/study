@@ -69,6 +69,7 @@ input:focus {
 }
 
 button {
+    cursor: pointer;
     background-color: transparent;
     color: var(--col-greenblue);
     border: 2px solid var(--col-greenblue);
@@ -87,10 +88,28 @@ button:focus, button:hover {
 button:active {
     color: var(--col-darkblue);
     background-color: var(--col-greenblue);
-    border: 2px solid rgba(0,0,0,0);
+    border: 2px solid transparent;
+}
+
+button.delete {
+    border-color: var(--col-msg-error);
+    color: var(--col-msg-error);
+}
+
+button.delete:focus, button.delete:hover {
+    content: "";
+    box-shadow: 0px 0px 10px var(--col-msg-error);
+    text-shadow: 0px 0px 10px var(--col-msg-error);
+    border: 2px solid var(--col-yellowhite);
+    color: var(--col-yellowhite);
 }
 
 label {
+    box-sizing: content-box;
     margin-left: 0.5rem;
     color: var(--col-greenblue);
+}
+
+label:has(> input:focus) {
+    color: var(--col-lightpink);
 }

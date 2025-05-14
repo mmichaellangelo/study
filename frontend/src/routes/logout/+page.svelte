@@ -1,5 +1,6 @@
 <script lang="ts">
     import { API } from '$lib/api.js';
+    import Loader from '$lib/components/Loader.svelte';
     import { GotoReload } from '$lib/functions/navigation.js';
     import { onMount } from 'svelte';
 
@@ -28,11 +29,11 @@
 </script>
 
 {#if isLoading}
-    <p>logging out...</p>
+    <Loader />
 {:else}
     {#if data}
         {#if success}
-            <p>logout success! redirecting...</p>
+            <p>you're logged out!</p>
         {:else}
             <p>there was a problem logging you out. please try refreshing the page.</p>
         {/if}

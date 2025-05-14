@@ -78,7 +78,6 @@
 
     #hero>span, #hero>p {
         animation: 0.5s fadeup;
-        text-shadow: 0px 0px 8px rgb(0, 0, 0);
     }
 
     #hero_card_left, #hero_card_right {

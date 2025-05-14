@@ -269,13 +269,16 @@
 
 {#if data.set}
     <dialog bind:this={dialogElement}>
-        <p>are you sure you want to delete this set?</p>
-        <button onclick={deleteSet}>yes</button>
-        <button onclick={closeDialog}>no</button>
+        <p>are you sure you want to delete this set? this can't be undone!</p>
+        <div>
+            <button onclick={deleteSet} class="delete">yes</button>
+            <button onclick={closeDialog}>no</button>
+        </div>
     </dialog>
-
-    <a href={`/sets/${data.set.id}`}>back</a>
-    <button onclick={showDialog}>delete set</button>
+    <div id="back_delete_container">
+        <a href={`/sets/${data.set.id}`}>back</a>
+        <button class="delete" onclick={showDialog}>delete set</button>
+    </div>
     <div id="title">
         <h2>{setLocal?.name}</h2>
         {#if isLoading}
@@ -305,7 +308,7 @@
                 </div>
                 {/each}
             {/if}
-            <button onclick={addCard}>new</button>
+            <button onclick={addCard} id="add_card_button">new card</button>
         </form>
         {/if}
     </div>
@@ -320,14 +323,33 @@
 <style>
     dialog {
         position: absolute;
-        background-color: var(--col-purplegrey);
-        color: var(--col-lightpink)
+        background-color: transparent;
+        backdrop-filter: blur(5px);
+        color: var(--col-lightpink);
+        border: 2px solid var(--col-msg-error);
+        border-radius: 1rem;
+        box-shadow: 0px 0px 10px var(--col-msg-error);
+        font-weight: 600;
+    }
+
+    dialog>p {
+        color: var(--col-msg-error);
+    }
+
+    dialog>div {
+        display: flex;
+        flex-direction: row;
+    }
+
+    dialog>div>button {
+        margin-left: 1rem;
     }
 
     ::backdrop {
         background-color: black;
-        opacity: 0.5;
+        opacity: 0.3;
     }
+
     #title {
         display: flex;
         flex-direction: row;
@@ -336,5 +358,17 @@
 
     #title>h2 {
         margin-right: 1rem;
+    }
+
+    #add_card_button {
+        display: block;
+        margin-top: 0.5rem;
+    }
+
+    #back_delete_container {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        max-width: 27rem;
     }
 </style>
