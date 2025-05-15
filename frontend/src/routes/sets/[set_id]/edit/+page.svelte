@@ -65,12 +65,18 @@
                 set_id: setLocal.id
             }
             if (setLocal.cards) {
-            setLocal.cards.push(newCard)
+                setLocal.cards.push(newCard)
             cardsToUpdate.push(newCard.id)
             } else {
                 setLocal.cards = [newCard]
                 cardsToUpdate.push(newCard.id)
             }
+            // timeout pushes execution to after DOM is updated
+            setTimeout(() => {
+                const newCardElement = document.querySelector(`#card_${newCard.id}`);
+                const frontInput = newCardElement?.querySelector<HTMLInputElement>(".front");
+                frontInput?.focus();
+            }, 0);
             localNewCardIndex--
         }
     }
@@ -301,9 +307,9 @@
             {#if setLocal.cards}
                 <label for="card">cards</label>
                 {#each setLocal.cards as card, index}
-                <div class="card" role="listitem">
-                        <input type="text" placeholder="front" bind:value={card.front} oninput={() => updateCard(card.id)}>
-                        <input type="text" placeholder="back" bind:value={card.back} oninput={() => updateCard(card.id)}>
+                <div class="card" id={`card_${card.id}`} role="listitem">
+                        <input class="front" type="text" placeholder="front" bind:value={card.front} oninput={() => updateCard(card.id)}>
+                        <input class="back" type="text" placeholder="back" bind:value={card.back} oninput={() => updateCard(card.id)}>
                         <button onclick={() => deleteCard(card.id)}>del</button>
                 </div>
                 {/each}
