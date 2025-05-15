@@ -35,10 +35,10 @@
             } else {
                 formState = {
                     loading: false,
-                    message: `login success! redirecting...`,
+                    message: `logged in!`,
                     success: true,
                 }
-                setTimeout(() => { GotoReload("/study") }, 1000)
+                setTimeout(() => { GotoReload("/study") }, 500)
             }
             
         } catch (e: any) {

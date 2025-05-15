@@ -58,8 +58,8 @@ input {
 }
 
 input:focus {
-    color: var(--col-lightpink);
-    border: 2px solid var(--col-lightpink);
+    color: var(--col-greenblue);
+    border: 2px solid var(--col-greenblue);
     outline: none;
 }
 
@@ -70,6 +70,7 @@ input:focus {
 
 button {
     cursor: pointer;
+    font-weight: 600;
     background-color: transparent;
     color: var(--col-greenblue);
     border: 2px solid var(--col-greenblue);
@@ -79,37 +80,40 @@ button {
     border-radius: 2rem;
 }
 
-button:focus, button:hover {
-    border: 2px solid var(--col-lightpink);
-    color: var(--col-lightpink);
-    outline: none;
-}
-
-button:active {
-    color: var(--col-darkblue);
-    background-color: var(--col-greenblue);
-    border: 2px solid transparent;
-}
-
 button.delete {
+    content: "";
     border-color: var(--col-msg-error);
     color: var(--col-msg-error);
 }
 
+button:focus, button:hover {
+    background-color: var(--col-greenblue);
+    color: var(--col-darkblue);
+    outline: none;
+}
+
 button.delete:focus, button.delete:hover {
-    content: "";
-    box-shadow: 0px 0px 10px var(--col-msg-error);
-    text-shadow: 0px 0px 10px var(--col-msg-error);
-    border: 2px solid var(--col-yellowhite);
+    border: 2px solid var(--col-msg-error);
+    background-color: var(--col-msg-error);
+}
+
+button:active {
+    transform: scale(95%);
     color: var(--col-yellowhite);
+    background-color: var(--col-greenblue);
+    transition: none;
+}
+
+button.delete:active {
+    background-color: var(--col-msg-error);
 }
 
 label {
     box-sizing: content-box;
     margin-left: 0.5rem;
-    color: var(--col-greenblue);
+    color: var(--col-lightblue);
 }
 
 label:has(> input:focus) {
-    color: var(--col-lightpink);
+    color: var(--col-greenblue);
 }
