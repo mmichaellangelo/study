@@ -16,6 +16,8 @@
     <h3>{data.set.name}</h3>
     <a href={`/sets/${data.set.id}/edit`}>edit</a>
     <a href={`/sets/${data.set.id}/flashcards`}>flashcards</a>
+    <a href={`/sets/${data.set.id}/test`}>test</a>
+
     <br /> <br />
     {#if data.set.cards}
     <table>

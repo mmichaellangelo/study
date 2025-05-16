@@ -187,13 +187,13 @@
 
     @keyframes from_left {
         from {
-            transform: rotateY(20deg) translateX(-1rem);
+            transform: rotateY(20deg) translateX(-2rem);
         }
     }
 
     @keyframes from_right {
         from {
-            transform: rotateY(-20deg) translateX(1rem);
+            transform: rotateY(-20deg) translateX(2rem);
         }
     }
 
