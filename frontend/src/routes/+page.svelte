@@ -1,5 +1,13 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
+    import { userState } from "$lib/state/account.svelte";
+    import { onMount } from "svelte";
 
+    onMount(() => {
+        if (userState.ID !== -1) {
+            goto("/study")
+        }
+    })
 </script>
 
 <div id="parent">

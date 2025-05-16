@@ -335,7 +335,7 @@
                 <div class="card" id={`card_${card.id}`} role="listitem">
                         <div contenteditable="true" class="front" placeholder="front" bind:innerText={card.front} oninput={() => updateCard(card.id)}></div>
                         <div contenteditable="true" class="back" placeholder="back" bind:innerText={card.back} oninput={() => updateCard(card.id)}></div>
-                        <button class="delete" onclick={() => deleteCard(card.id)}>del</button>
+                        <button class="delete" onclick={(e) => {e.preventDefault(); deleteCard(card.id);}}>del</button>
                 </div>
                 {/each}
             {/if}
