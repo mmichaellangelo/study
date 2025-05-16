@@ -14,13 +14,13 @@
 
 {#if data.set}
     <h3>{data.set.name}</h3>
-    <a href={`/sets/${data.set.id}/edit`}>edit set</a>
+    <a href={`/sets/${data.set.id}/edit`}>edit</a>
+    <a href={`/sets/${data.set.id}/flashcards`}>flashcards</a>
     <br /> <br />
     {#if data.set.cards}
     <table>
         <thead>
             <tr>
-                <th>id</th>
                 <th>front</th>
                 <th>back</th>
             </tr>
@@ -28,7 +28,6 @@
         <tbody>
             {#each data.set.cards as card}
                 <tr>
-                    <td>{card.id}</td>
                     <td>{card.front}</td>
                     <td>{card.back}</td>
                 </tr>
@@ -45,8 +44,15 @@
 {/if}
 
 <style>
+    table {
+        width: 100%;
+        max-width: 50rem;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
     th, td {
         padding: 0.5rem;
         outline: 1px solid var(--col-lightblue);
+        word-wrap: break-word;
     }
 </style>

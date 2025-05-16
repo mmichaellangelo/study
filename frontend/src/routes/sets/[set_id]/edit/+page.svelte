@@ -4,6 +4,7 @@
     import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
+    import { preventDefault } from "svelte/legacy";
 
     let {data} = $props()
 
@@ -76,6 +77,7 @@
                 const newCardElement = document.querySelector(`#card_${newCard.id}`);
                 const frontInput = newCardElement?.querySelector<HTMLInputElement>(".front");
                 frontInput?.focus();
+                frontInput?.scrollIntoView()
             }, 0);
             localNewCardIndex--
         }
@@ -299,8 +301,8 @@
         {#if setLocal}
         <form>
             <label>
-                title <br />
-                <input type="text" placeholder="name" bind:value={setLocal.name} oninput={updateName}>
+                name <br />
+                <input type="text" name="name" placeholder="name" bind:value={setLocal.name} oninput={updateName}>
             </label>
             
             <br />
@@ -308,9 +310,9 @@
                 <label for="card">cards</label>
                 {#each setLocal.cards as card, index}
                 <div class="card" id={`card_${card.id}`} role="listitem">
-                        <input class="front" type="text" placeholder="front" bind:value={card.front} oninput={() => updateCard(card.id)}>
-                        <input class="back" type="text" placeholder="back" bind:value={card.back} oninput={() => updateCard(card.id)}>
-                        <button onclick={() => deleteCard(card.id)}>del</button>
+                        <div contenteditable="true" class="front" placeholder="front" bind:innerText={card.front} oninput={() => updateCard(card.id)}></div>
+                        <div contenteditable="true" class="back" placeholder="back" bind:innerText={card.back} oninput={() => updateCard(card.id)}></div>
+                        <button class="delete" onclick={() => deleteCard(card.id)}>del</button>
                 </div>
                 {/each}
             {/if}
@@ -329,7 +331,7 @@
 <style>
     dialog {
         position: absolute;
-        background-color: transparent;
+        background-color: var(--col-darkblue);
         backdrop-filter: blur(5px);
         color: var(--col-lightpink);
         border: 2px solid var(--col-msg-error);
@@ -342,18 +344,13 @@
         color: var(--col-msg-error);
     }
 
-    dialog>div {
-        display: flex;
-        flex-direction: row;
-    }
-
     dialog>div>button {
         margin-left: 1rem;
     }
 
     ::backdrop {
-        background-color: black;
-        opacity: 0.3;
+        backdrop-filter: blur(7px);
+        background-color: rgba(0,0,0,0.6);
     }
 
     #title {
@@ -376,5 +373,31 @@
         flex-direction: row;
         justify-content: space-between;
         max-width: 27rem;
+    }
+
+    .card {
+        display: flex;
+        flex-direction: row;
+        align-items: start;
+    }
+
+    #create_frame {
+        display: block;
+        width: 100%;
+    }
+
+    .front, .back {
+        height: fit-content;
+        margin-bottom: 1rem;
+    }
+
+    .front {
+        width: 40%;
+        max-width: 25rem;
+    }
+
+    .back {
+        width: 50%;
+        max-width: 40rem;
     }
 </style>

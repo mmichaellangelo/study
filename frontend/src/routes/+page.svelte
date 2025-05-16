@@ -24,6 +24,7 @@
 
     #parent {
         perspective: 1000px;
+        padding: 1rem;
     }
 
     #hero {
@@ -34,7 +35,6 @@
         align-items: center;
         background-color: transparent;
         width: fit-content;
-        max-width: 70%;
         padding: 1rem;
         margin-left: auto;
         margin-right: auto;

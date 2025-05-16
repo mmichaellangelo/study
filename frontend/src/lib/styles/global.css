@@ -15,6 +15,7 @@
 
     --ff-notable: "Notable", sans-serif;
     --ff-fugaz: "Fugaz One", sans-serif;
+    scroll-behavior: smooth;
 }
 
 * {
@@ -45,7 +46,7 @@ a:active {
     color: var(--col-yellowhite);
 }
 
-input {
+input, [contenteditable="true"] {
     color: var(--col-lightblue);
     background-color: transparent;
     border: 2px solid var(--col-lightblue);
@@ -57,7 +58,7 @@ input {
     margin-bottom: 0.3rem;
 }
 
-input:focus {
+input:focus, [contenteditable="true"]:focus {
     color: var(--col-greenblue);
     border: 2px solid var(--col-greenblue);
     outline: none;
