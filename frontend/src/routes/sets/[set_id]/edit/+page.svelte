@@ -218,10 +218,10 @@
                     }
                     await invalidate((url) => url.pathname === `/sets/${data.set?.id}`)
                     const newRemote = await res.json() as Set
-                    nameUpdate = false
-                    cardsToUpdate = []
-                    cardsToDelete = []
                     setRemote = newRemote
+
+                    nameUpdate = !(setLocal.name == setRemote.name)
+                    
                     if (setRemote.cards && setLocal.cards) {
                         if (setLocal.cards.length == setRemote.cards.length) {
                             for (let i = 0; i < setLocal.cards.length; i++) {
@@ -231,6 +231,29 @@
                             }
                         }
                     }
+
+                    cardsToUpdate = cardsToUpdate.filter((id) => id >= 0)
+
+                    u.cards.forEach((c) => {
+                        if (c.type == "update") {
+                            if (c.id) {
+                                const cardRemote = setRemote?.cards?.find((card) => card.id == c.id)
+                                const cardLocal = setLocal?.cards?.find((card) => card.id == c.id)
+                                if (cardLocal?.front === cardRemote?.front &&
+                                    cardLocal?.back === cardRemote?.back) {
+                                        cardsToUpdate = cardsToUpdate.filter((id) => id !== cardRemote?.id)
+                                }
+                                
+                            } else {
+                                // TODO SOMETHING WENT WRONG
+                            }
+                        } else if (c.type == "delete") {
+                            const cardRemote = setRemote?.cards?.find((card) => card.id == c.id)
+                            if (cardRemote == undefined) {
+                                cardsToDelete = cardsToDelete.filter((id) => id !== c.id)
+                            }
+                        }
+                    })
                     isLoading = false
                 } catch (e) {
                     console.log(e)
@@ -284,7 +307,7 @@
         </div>
     </dialog>
     <div id="back_delete_container">
-        <a href={`/sets/${data.set.id}`}>back</a>
+        <a href={`/sets/${data.set.id}`}>back to set</a>
         <button class="delete" onclick={showDialog}>delete set</button>
     </div>
     <div id="title">

@@ -88,7 +88,7 @@
 <div id="container">
 {#if data.set && currentCard}
 
-    <a href={`/sets/${data.set.id}`}>back</a>
+    <a href={`/sets/${data.set.id}`}>back to set</a>
     <h2>{data.set.name}</h2>
 
     <div id="navigation">

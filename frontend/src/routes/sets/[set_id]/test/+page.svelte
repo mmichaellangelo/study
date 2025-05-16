@@ -50,7 +50,7 @@
     }
 </script>
 
-<a href={`/sets/${data.set?.id}`}>back</a>
+<a href={`/sets/${data.set?.id}`}>back to set</a>
 <h2>test</h2>
 {#if mode == "setup"}
     <form>

@@ -1,5 +1,6 @@
 <script lang="ts">
-    import Loader from '$lib/components/Loader.svelte';
+    import { goto } from '$app/navigation';
+import Loader from '$lib/components/Loader.svelte';
     import { onMount } from 'svelte';
 
     let { data } = $props()
@@ -10,13 +11,13 @@
     })
 </script>
 
-<a href="/study">back</a>
+<a href="/study">back to study sets</a>
 
 {#if data.set}
-    <h3>{data.set.name}</h3>
-    <a href={`/sets/${data.set.id}/edit`}>edit</a>
-    <a href={`/sets/${data.set.id}/flashcards`}>flashcards</a>
-    <a href={`/sets/${data.set.id}/test`}>test</a>
+    <h2>{data.set.name}</h2>
+    <button onclick={() => goto(`/sets/${data.set.id}/edit`)}>edit</button>
+    <button onclick={() => goto(`/sets/${data.set.id}/flashcards`)}>flashcards</button>
+    <button onclick={() => goto(`/sets/${data.set.id}/test`)}>test</button>
 
     <br /> <br />
     {#if data.set.cards}
@@ -46,15 +47,22 @@
 {/if}
 
 <style>
+
     table {
         width: 100%;
-        max-width: 50rem;
+        max-width: 30rem;
         border-collapse: collapse;
         table-layout: fixed;
     }
+
     th, td {
         padding: 0.5rem;
         outline: 1px solid var(--col-lightblue);
         word-wrap: break-word;
+    }
+
+    th {
+        text-align: left;
+        color: var(--col-lightblue);
     }
 </style>
