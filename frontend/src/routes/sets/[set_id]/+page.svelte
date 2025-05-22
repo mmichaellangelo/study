@@ -1,10 +1,11 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-import Loader from '$lib/components/Loader.svelte';
+    import Loader from '$lib/components/Loader.svelte';
     import { onMount } from 'svelte';
 
     let { data } = $props()
     let isLoading = $state(true)
+    let showBack = $state(false)
 
     onMount(() => {
         isLoading = false
@@ -25,14 +26,27 @@ import Loader from '$lib/components/Loader.svelte';
         <thead>
             <tr>
                 <th>front</th>
-                <th>back</th>
+                <th>
+                    {#if showBack}
+                        back
+                    {:else}
+                        <button onclick={() => showBack = true}>show back</button>
+                    {/if}
+                    
+                </th>
             </tr>
         </thead>
         <tbody>
             {#each data.set.cards as card}
                 <tr>
                     <td>{card.front}</td>
-                    <td>{card.back}</td>
+                    <td>
+                        {#if showBack}
+                            {card.back}
+                        {:else}
+                            ---
+                        {/if}
+                    </td>
                 </tr>
             {/each}
         </tbody>

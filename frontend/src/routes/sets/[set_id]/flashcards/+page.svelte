@@ -83,6 +83,37 @@
             }
         }
     }
+
+    var touchStartX = 0;
+    var touchStartY = 0;
+    var touchEndX = 0;
+    var touchEndY = 0;
+
+    function touchRestart() {
+        touchStartX = 0;
+        touchStartY = 0;
+        touchEndX = 0;
+        touchEndY = 0;
+    }
+
+    function handleTouchStart(e: TouchEvent) {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+
+        if (touchEndX - touchStartX > 50) {
+            next();
+            touchRestart();
+        }
+        if (touchEndX - touchStartX < -50) {
+            prev();
+            touchRestart();
+        }
+    }
 </script>
 
 <div id="container">
@@ -94,10 +125,10 @@
     <div id="navigation">
         <button onclick={prev}>prev</button>
         <span>{cardIndex + 1} of {cardsLength}</span>
-        <button onclick={next}>next</button>
+        <button onclick={next}>next</button>        
     </div>
 
-    <div id="cards_container" onclick={flip} role="input" onkeydown={handleKey}>
+    <div id="cards_container" onclick={flip} ontouchstart={handleTouchStart} ontouchend={handleTouchEnd} role="input" onkeydown={handleKey}>
         <div class={`card ${flipped ? "back" : "front"} ${direction}`}
              style={`border-color: ${flipped ? "var(--col-greenblue)" : "var(--col-lightpink"}`}>
             <h3>{currentCard.front}</h3>
