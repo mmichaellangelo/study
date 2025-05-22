@@ -106,11 +106,11 @@
         touchEndY = e.changedTouches[0].screenY;
 
         if (touchEndX - touchStartX > 50) {
-            next();
+            prev();
             touchRestart();
         }
         if (touchEndX - touchStartX < -50) {
-            prev();
+            next();
             touchRestart();
         }
     }
