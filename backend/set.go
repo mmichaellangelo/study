@@ -51,13 +51,14 @@ var (
 	CardREWithSetID = regexp.MustCompile(`^\/sets\/(\d+)\/?$`)
 )
 
+// //////////
+// ROUTES
 func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 	claims := r.Context().Value(claimsKey).(*AccountClaims)
 	clientIP := r.Context().Value(clientIPKey).(string)
 
 	switch {
-
 	// CREATE SET ROUTE
 	case SetRE.MatchString(url) && r.Method == http.MethodPost:
 		setID, err := h.CreateSet(claims.UserID)
@@ -92,6 +93,11 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, "error getting set", http.StatusNotFound)
 			log.Printf("error getting set: %v\n", err)
+			return
+		}
+		if claims.UserID != set.AccountID {
+			er := NewErrorResponse(http.StatusUnauthorized, AccessNotAllowed, nil)
+			er.LogAndWrite(w, r)
 			return
 		}
 		data, err := json.Marshal(set)

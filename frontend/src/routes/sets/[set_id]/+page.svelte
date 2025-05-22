@@ -6,6 +6,17 @@
     let { data } = $props()
     let isLoading = $state(true)
     let showBack = $state(false)
+    let errorMessage: string = $derived.by(() => {
+        if (!data.error) {
+            return ""
+        }
+        switch (data.error.errcode) {
+            case "ACCESS_NOT_ALLOWED":
+                return "sorry, you don't have access to this set."
+            default:
+                return "an unknown error occurred."
+        }
+    })
 
     onMount(() => {
         isLoading = false
@@ -56,7 +67,7 @@
     {#if isLoading}
         <Loader />
     {:else}
-        <p>there was an error loading the set{data.error? `: ${data.error}` : ""}</p>
+        <p>{errorMessage}</p>
     {/if}
 {/if}
 

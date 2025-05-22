@@ -26,6 +26,7 @@ const (
 	BadAuthHeader           ErrCode = "BAD_AUTH_HEADER"
 	BadClaims               ErrCode = "BAD_CLAIMS"
 	PasswordIncorrect       ErrCode = "PASSWORD_INCORRECT"
+	AccessNotAllowed        ErrCode = "ACCESS_NOT_ALLOWED"
 
 	// General Errors
 	NotFound        ErrCode = "NOT_FOUND"

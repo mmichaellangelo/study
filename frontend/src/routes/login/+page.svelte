@@ -26,10 +26,22 @@
                 body: formData,
                 credentials: "include"
             })
+            var message = "an unknown error occurred"
             if (!response.ok) {
+                const data = await response.json()
+                if (data.errcode) {
+                    switch (data.errcode) {
+                        case "NOT_FOUND":
+                            message = "account not found"
+                            break
+                        case "PASSWORD_INCORRECT":
+                            message = "password incorrect"
+                }
+                }
+                
                 formState = {
                     loading: false,
-                    message: await response.text(),
+                    message: message,
                     success: false,
                 }
             } else {

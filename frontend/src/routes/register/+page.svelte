@@ -26,17 +26,29 @@ import StatusMessage from "$lib/components/StatusMessage.svelte";
                 credentials: "include",
             })
             if (!response.ok) {
+                var message = "an unknown error occurred"
+                const data = await response.json()
+                if (data.errcode) {
+                    switch (data.errcode) {
+                        case "ACCOUNT_USERNAME_EXISTS":
+                            message = "an account with that username already exists"
+                            break
+                        case "ACCOUNT_EMAIL_EXISTS":
+                            message = "an account with that email address already exists"
+                            break
+                    }
+                }
                 formStatus = {
                     loading: false,
                     success: false,
-                    message: await response.text()
+                    message: message
                 }
                 return
             } else {
                 formStatus = {
                     loading: false,
                     success: true,
-                    message: "registration success! redirecting..."
+                    message: "registered!"
                 }
                 setTimeout(() => { GotoReload("/") }, 1000)
             }

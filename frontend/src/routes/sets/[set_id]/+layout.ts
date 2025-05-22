@@ -10,7 +10,7 @@ export const load: LayoutLoad = async ({ params, fetch }) => {
             
         })
         if (!res.ok) {
-            return { error: await res.text() }
+            return { error: await res.json() }
         }
         const data = await res.text()
         const set: Set = JSON.parse(data)
