@@ -1,4 +1,16 @@
 services:
+  web:
+    build:
+      context: frontend
+      target: dev
+    volumes:
+      - ./frontend:/app
+    env_file: ./frontend/.env
+    environment:
+      - VIRTUAL_HOST=dev.localhost
+    restart: unless-stopped
+    expose: 
+      - "5173"
   api:
     build:
       context: backend
@@ -6,9 +18,17 @@ services:
     volumes:
       - ./backend/:/app
     env_file: ./backend/.env
+    environment:
+      - VIRTUAL_HOST=api.dev.localhost
     restart: unless-stopped
+    expose: 
+      - "8080"
+  proxy:
+    image: jwilder/nginx-proxy:latest
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
     ports:
-      - "8080:8080"
+      - "80:80"
   db:
     image: postgres:latest
     container_name: postgres_db
@@ -16,8 +36,9 @@ services:
       POSTGRES_USER: mike
       POSTGRES_PASSWORD: password
       POSTGRES_DB: db
-    ports:
-      - "5432:5432"
+      VIRTUAL_HOST: db.dev.localhost
+    expose: 
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - type: bind
@@ -27,8 +48,10 @@ services:
   adminer:
     image: adminer:latest
     container_name: adminer
-    ports:
-      - "8000:8080"
+    expose: 
+      - "8080"
+    environment:
+      VIRTUAL_HOST: adminer.dev.localhost
     restart: unless-stopped
 
 volumes:
