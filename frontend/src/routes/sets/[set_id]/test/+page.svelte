@@ -1,6 +1,4 @@
 <script lang="ts">
-    import type { Card } from '$lib/types/types.js';
-    import { onMount } from 'svelte';
 
     let {data} = $props()
 
@@ -23,21 +21,43 @@
         return array;
     }
 
+    let numQuestions = $state(data.set?.cards?.length || 1)
+    let answerWith = $state("front")
+    let order = $state("random")
+
     function createTest() {
         if (data.set?.cards) {
             questions = []
             const cards = data.set.cards
-            for (let i = 0; i < cards.length; i++) {
+            for (let i = 0; i < numQuestions; i++) {
                 if (typeof cards[i].front == 'string' && typeof cards[i].back == 'string') {
-                    questions.push({
-                        question: String(cards[i].front),
-                        answer: String(cards[i].back),
-                        response: "",
-                        correct: false
-                    })
+                    if (answerWith == "front") {
+                        questions.push({
+                            question: String(cards[i].back),
+                            answer: String(cards[i].front),
+                            response: "",
+                            correct: false
+                        })
+                    } else {
+                        questions.push({
+                            question: String(cards[i].front),
+                            answer: String(cards[i].back),
+                            response: "",
+                            correct: false
+                        })
+                    }
                 }
             }
-            questions = shuffle(questions)
+            switch (order) {
+                case "random":
+                    questions = shuffle(questions)
+                    break
+                case "created":
+                    break
+                case "reverse":
+                    questions.reverse()
+                    break
+            }   
             mode = "test"
         }
     }
@@ -53,9 +73,37 @@
 <a href={`/sets/${data.set?.id}`}>back to set</a>
 <h2>test</h2>
 {#if mode == "setup"}
-    <form>
-        <button onclick={createTest}>create test</button>
-    </form>
+    <label>
+        number of questions (set has {data.set?.cards?.length} cards) <br />
+        <input type="number" min="1" max={data.set?.cards?.length} defaultvalue={data.set?.cards?.length} bind:value={numQuestions} /> <br />
+    </label> <br />
+    <label>
+        answer with: <br />
+        <label>
+            <input type="radio" name="answer_with" value="front" bind:group={answerWith}>
+            front
+        </label> <br />
+        <label>
+            <input type="radio" name="answer_with" value="back" bind:group={answerWith}>
+            back
+        </label> <br />
+    </label> <br />
+    <label>
+        order: <br />
+        <label>
+            <input type="radio" name="order" value="random" bind:group={order}>
+            random
+        </label> <br />
+        <label>
+            <input type="radio" name="order" value="created" bind:group={order}>
+            created
+        </label> <br />
+        <label>
+            <input type="radio" name="order" value="reverse" bind:group={order}>
+            reverse
+        </label> <br />
+    </label> <br />
+    <button onclick={createTest}>create test</button>
 {:else if mode == "test"}
     {#each questions as q}
         <p class="question">{q.question}</p>

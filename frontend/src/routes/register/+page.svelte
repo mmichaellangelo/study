@@ -80,7 +80,7 @@ import StatusMessage from "$lib/components/StatusMessage.svelte";
     <label>password <br />
         <input type="password" name="password" required>
     </label> <br />
-    <button type="submit" disabled={formStatus.loading}>Register</button>
+    <button type="submit" disabled={formStatus.loading}>register</button>
 </form>
 
 <br />

@@ -79,7 +79,7 @@
     <label>password <br />
         <input type="password" name="password" required>
     </label> <br />
-    <button type="submit" disabled={formState.loading}>Log In</button>
+    <button type="submit" disabled={formState.loading}>log in</button>
 </form>
 
 <br />
