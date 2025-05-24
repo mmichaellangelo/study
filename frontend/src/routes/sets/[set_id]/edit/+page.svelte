@@ -7,7 +7,7 @@
 
     let {data} = $props()
 
-    let setLocal = $state<Set|undefined>(undefined)
+    let setLocal = $state<Set|undefined>()
     let setRemote = $state<Set|undefined>(undefined)
     let isLoading = $state(true)
 
@@ -281,6 +281,9 @@
                             }
                         }
                         // Add new card to setRemote TODO date, set_id sent from API
+                        if (setRemote && !setRemote.cards) {
+                            setRemote.cards = []
+                        }
                         setRemote?.cards?.push({
                             id: cardRes.new_id,
                             front: cardRes.front,
