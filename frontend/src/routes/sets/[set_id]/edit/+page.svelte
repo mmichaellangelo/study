@@ -4,14 +4,11 @@
     import Loader from "$lib/components/Loader.svelte";
     import type { Card, Set } from "$lib/types/types";
     import { onMount } from "svelte";
-    import { preventDefault } from "svelte/legacy";
 
     let {data} = $props()
 
-    
     let setLocal = $state<Set|undefined>(undefined)
     let setRemote = $state<Set|undefined>(undefined)
-
     let isLoading = $state(true)
 
     let synced = $derived.by(() => {
@@ -101,6 +98,7 @@
     let cardsToDelete = $state<number[]>([])
     let nameUpdate = $state(false)
 
+    // Local card has been modified >> add it to cardsToUpdate if needed
     function updateCard(id: number) {
         if (setLocal && setRemote && setLocal.cards && setRemote.cards) {
             if (!cardsToUpdate.includes(id)) {
@@ -116,7 +114,7 @@
                 } else if (cardLocal.front == cardRemote.front &&
                     cardLocal.back == cardRemote.back) {
                         // card synced >> remove from update list
-                        cardsToUpdate.filter((i) => {i !== id})
+                        cardsToUpdate = cardsToUpdate.filter((i) => i !== id)
                 } else {
                     // not synced
                     cardsToUpdate.push(id)
@@ -144,121 +142,183 @@
         nameUpdate = true
     }
 
-    interface CardUpdate {
-        type: "create" | "update" | "delete"
-        id?: number
+    interface CardCreateRequest {
+        id: number
+        front: string
+        back: string
+    }
+
+    interface CardCreateResponse {
+        old_id: number
+        new_id: number
+        front: string
+        back: string
+    }
+
+    interface CardUpdateRequest {
+        id: number
         front?: string
         back?: string
     }
 
-    interface SetUpdate {
+    interface CardUpdateResponse {
+        id: number
+        front: string
+        back: string
+    }
+
+    interface SetUpdateRequest {
         name?: string
         description?: string
-        cards?: CardUpdate[]
+        cards_created?: CardCreateRequest[]
+        cards_updated?: CardUpdateRequest[]
+        cards_deleted?: number[]
+    }
+
+    interface SetUpdateResponse {
+        name?: string
+        description?: string
+        cards_created?: CardCreateResponse[]
+        cards_updated?: CardUpdateResponse[]
+        cards_deleted?: number[]
     }
     
+    /**
+     * Determines what set data has changed, sends relevant information to the API,
+     * updates setRemote with new changes as reported by the API,
+     * updates id's of any newly created cards in setLocal
+     */
     async function update() {
-        if (setLocal && setRemote) {
-            var u: SetUpdate = {}
-            if (nameUpdate) {
-                // add name to update
-                u.name = setLocal.name
-            }
-            u.cards = []
-            if (cardsToUpdate.length !== 0) {
-                // add cards to update
-                for (const cardID of cardsToUpdate) {
-                    if (setLocal.cards) {
-                        const cardLocal = setLocal.cards.find((card) => card.id == cardID)
-                        if (cardLocal && cardLocal.id < 0) {
-                            // new card
-                            const newCard: CardUpdate = {
-                                type: "create",
+        if (!setLocal || !setRemote) {
+            return
+        }
+        var u: SetUpdateRequest = {}
+        if (nameUpdate) {
+            // add name to update
+            u.name = setLocal.name
+        }
+        if (cardsToUpdate.length !== 0) {
+            // Add cards to create or update
+            for (const cardID of cardsToUpdate) {
+                if (setLocal.cards) {
+                    const cardLocal = setLocal.cards.find((card) => card.id == cardID)
+                    if (cardLocal && cardLocal.id < 0) {
+                        // Create card
+                        const newCard: CardCreateRequest = {
+                            id: cardLocal.id,
+                            front: cardLocal.front || "",
+                            back: cardLocal.back || ""
+                        }
+                        if (!u.cards_created) {
+                            u.cards_created = []
+                        }
+                        u.cards_created.push(newCard)
+                    } else {
+                        // Update card
+                        if (cardLocal) {
+                            if (!u.cards_updated) {
+                                u.cards_updated = []
+                            }
+                            u.cards_updated.push({
+                                id: cardLocal.id,
                                 front: cardLocal.front || "",
                                 back: cardLocal.back || ""
-                            }
-                            u.cards.push(newCard)
-                        } else {
-                            // existing card
-                            if (cardLocal) {
-                                u.cards.push({
-                                    type: "update",
-                                    id: cardLocal.id,
-                                    front: cardLocal.front || "",
-                                    back: cardLocal.back || ""
                             })
-                            }
-                            
-                        }
+                        } 
                     }
-                } 
+                }
+            } 
+        }
+        // Add cards to delete
+        if (cardsToDelete.length !== 0) {
+            for (const id of cardsToDelete) {
+                if (!u.cards_deleted) {
+                    u.cards_deleted = []
+                }
+                u.cards_deleted.push(id)
             }
-
-            if (cardsToDelete.length !== 0) {
-                for (const id of cardsToDelete) {
-                    u.cards?.push({
-                        type: "delete",
-                        id: id,
+        }
+        // If anything needs to be updated, send the request
+        if (u.name || u.description || u.cards_created || u.cards_updated || u.cards_deleted) {
+            try {
+                isLoading = true
+                const res = await fetch(`${API}/sets/${setRemote?.id}`, {
+                    method: "PATCH",
+                    credentials: "include",
+                    body: JSON.stringify(u)
+                })
+                if (!res.ok) {
+                    console.log(await res.text())
+                    isLoading = false
+                    return
+                }
+                // Invalidate cached set data, forcing a reload when returning to set page
+                await invalidate((url) => url.pathname === `/sets/${data.set?.id}`)
+                const updateRes = await res.json() as SetUpdateResponse
+                // If name returned, update setRemote's name
+                if (updateRes.name) {
+                    setRemote.name = updateRes.name
+                }
+                // If description returned, update setRemote's description
+                if (updateRes.description) {
+                    setRemote.description = updateRes.description
+                }
+                // If cards have been created, add them to setRemote, 
+                // update the id's of the cards in setLocal,
+                // and remove the temporary id's from cardsToUpdate
+                if (updateRes.cards_created) {
+                    // Update card's id in setLocal
+                    updateRes.cards_created.forEach((cardRes) => {
+                        var cardLocal = setLocal?.cards?.find(cardLocal => cardLocal.id == cardRes.old_id)
+                        if (cardLocal) {
+                            const oldID = cardLocal.id
+                            cardLocal.id = cardRes.new_id
+                            // Remove temporary id from cardsToUpdate
+                            cardsToUpdate = cardsToUpdate.filter((id) => id !== oldID)
+                            // If not synced, add new id to cardsToUpdate
+                            if (cardLocal.front !== cardRes.front || cardLocal.back !== cardRes.back || cardLocal.id !== cardRes.new_id) {
+                                cardsToUpdate.push(cardLocal.id)
+                            }
+                        }
+                        // Add new card to setRemote TODO date, set_id sent from API
+                        setRemote?.cards?.push({
+                            id: cardRes.new_id,
+                            front: cardRes.front,
+                            back: cardRes.back,
+                            created: new Date(),
+                            set_id: data?.set?.id || 0
+                        })
                     })
                 }
-            }
-                    
-            if (u.name || u.description || u.cards.length > 0) {
-                try {
-                    isLoading = true
-                    const res = await fetch(`${API}/sets/${setRemote?.id}`, {
-                        method: "PATCH",
-                        credentials: "include",
-                        body: JSON.stringify(u)
-                    })
-                    if (!res.ok) {
-                        console.log(await res.text())
-                        isLoading = false
-                        return
+                // Flag name for update only if the local copy does not match the new remote copy
+                nameUpdate = !(setLocal.name == setRemote.name)
+                // TODO descriptionUpdate
+                
+                // Update cards in setRemote to match server response
+                u.cards_updated?.forEach((c) => {
+                    const cardRemote = setRemote?.cards?.find((card) => card.id === c.id)
+                    if (cardRemote) {
+                        cardRemote.front = c.front
+                        cardRemote.back = c.back
                     }
-                    await invalidate((url) => url.pathname === `/sets/${data.set?.id}`)
-                    const newRemote = await res.json() as Set
-                    setRemote = newRemote
-
-                    nameUpdate = !(setLocal.name == setRemote.name)
-                    
-                    if (setRemote.cards && setLocal.cards) {
-                        if (setLocal.cards.length == setRemote.cards.length) {
-                            for (let i = 0; i < setLocal.cards.length; i++) {
-                                if (setLocal.cards[i].id < 0) {
-                                    setLocal.cards[i].id = setRemote.cards[i].id
-                                }
-                            }
-                        }
+                    const cardLocal = setLocal?.cards?.find((card) => card.id === c.id)
+                    if (cardLocal?.front === cardRemote?.front &&
+                        cardLocal?.back === cardRemote?.back) {
+                            cardsToUpdate = cardsToUpdate.filter((id) => id !== c.id)
                     }
-
-                    cardsToUpdate = cardsToUpdate.filter((id) => id >= 0)
-
-                    u.cards.forEach((c) => {
-                        if (c.type == "update") {
-                            if (c.id) {
-                                const cardRemote = setRemote?.cards?.find((card) => card.id == c.id)
-                                const cardLocal = setLocal?.cards?.find((card) => card.id == c.id)
-                                if (cardLocal?.front === cardRemote?.front &&
-                                    cardLocal?.back === cardRemote?.back) {
-                                        cardsToUpdate = cardsToUpdate.filter((id) => id !== cardRemote?.id)
-                                }
-                                
-                            } else {
-                                // TODO SOMETHING WENT WRONG
-                            }
-                        } else if (c.type == "delete") {
-                            const cardRemote = setRemote?.cards?.find((card) => card.id == c.id)
-                            if (cardRemote == undefined) {
-                                cardsToDelete = cardsToDelete.filter((id) => id !== c.id)
-                            }
-                        }
-                    })
-                    isLoading = false
-                } catch (e) {
-                    console.log(e)
-                    isLoading = false
-                }
+                })
+                // Remove any deleted cards from setRemote to match server response
+                u.cards_deleted?.forEach((id) => {
+                    if (setRemote) {
+                        setRemote.cards = setRemote?.cards?.filter((card) => card.id !== id)   
+                        cardsToDelete = cardsToDelete.filter((i) => i !== id)
+                    }
+                    
+                })
+                isLoading = false
+            } catch (e) {
+                console.log(e)
+                isLoading = false
             }
         }
     }

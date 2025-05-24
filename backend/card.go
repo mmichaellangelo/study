@@ -18,11 +18,29 @@ type Card struct {
 	Created time.Time `json:"created"`
 }
 
-type CardUpdate struct {
-	ID    *int    `json:"id"`
-	Front *string `json:"front"`
-	Back  *string `json:"back"`
-	Type  string  `json:"type"`
+type CardCreateRequest struct {
+	ID    int    `json:"id"`
+	Front string `json:"front"`
+	Back  string `json:"back"`
+}
+
+type CardCreateResponse struct {
+	OldID int    `json:"old_id"`
+	NewID int    `json:"new_id"`
+	Front string `json:"front"`
+	Back  string `json:"back"`
+}
+
+type CardUpdateRequest struct {
+	ID    int    `json:"id"`
+	Front string `json:"front"`
+	Back  string `json:"back"`
+}
+
+type CardUpdateResponse struct {
+	ID    int    `json:"id"`
+	Front string `json:"front"`
+	Back  string `json:"back"`
 }
 
 type CardHandler struct {
@@ -94,14 +112,21 @@ func (h *CardHandler) GetCardsBySetID(set_id int) (*[]Card, error) {
 ////////////
 // UPDATE
 
-func (h *CardHandler) UpdateCard(u CardUpdate) error {
-	_, err := h.db.Exec(context.Background(),
-		`UPDATE cards SET front=$1, back=$2
-		 WHERE id=$3`, u.Front, u.Back, u.ID)
+func (h *CardHandler) UpdateCard(u CardUpdateRequest) (*CardUpdateResponse, error) {
+	rows, err := h.db.Query(context.Background(),
+		`UPDATE cards SET front=$1, back=$2 WHERE id=$3
+		 RETURNING id, front, back`, u.Front, u.Back, u.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	defer rows.Close()
+	rows.Next()
+	var c CardUpdateResponse
+	err = rows.Scan(&c.ID, &c.Front, &c.Back)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 ////////////

@@ -24,10 +24,20 @@ type Set struct {
 	Cards       *[]Card     `json:"cards"`
 }
 
-type SetUpdate struct {
-	Name        *string       `json:"name"`
-	Description *string       `json:"description"`
-	Cards       *[]CardUpdate `json:"cards"`
+type SetUpdateRequest struct {
+	Name         *string              `json:"name"`
+	Description  *string              `json:"description"`
+	CardsCreated *[]CardCreateRequest `json:"cards_created"`
+	CardsUpdated *[]CardUpdateRequest `json:"cards_updated"`
+	CardsDeleted *[]int               `json:"cards_deleted"`
+}
+
+type SetUpdateResponse struct {
+	Name         *string               `json:"name"`
+	Description  *string               `json:"description"`
+	CardsCreated *[]CardCreateResponse `json:"cards_created"`
+	CardsUpdated *[]CardUpdateResponse `json:"cards_updated"`
+	CardsDeleted *[]int                `json:"cards_deleted"`
 }
 
 type SetHandler struct {
@@ -137,7 +147,7 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error parsing id from url: %v\n", err)
 			http.Error(w, "invalid ID", http.StatusBadRequest)
 		}
-		var update SetUpdate
+		var req SetUpdateRequest
 		defer r.Body.Close()
 		bytes, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -145,64 +155,86 @@ func (h *SetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "error reading body", http.StatusBadRequest)
 			return
 		}
-		err = json.Unmarshal(bytes, &update)
+		err = json.Unmarshal(bytes, &req)
 		if err != nil {
 			log.Printf("error unmarshalling json for %s: %v\n", clientIP, err)
 			http.Error(w, "error unmarshalling json", http.StatusBadRequest)
 			return
 		}
-		if update.Name != nil {
-			h.UpdateName(set_id, *update.Name)
+		var res SetUpdateResponse
+		// Update name
+		if req.Name != nil {
+			err = h.UpdateName(set_id, *req.Name)
+			if err != nil {
+				er := NewErrorResponse(http.StatusInternalServerError, InternalError, fmt.Errorf("error updating set name: %w", err))
+				er.LogAndWrite(w, r)
+				return
+			}
+			res.Name = new(string)
+			*res.Name = *req.Name
 		}
-		if update.Description != nil {
-			h.UpdateDescription(set_id, *update.Description)
+		// Update description
+		if req.Description != nil {
+			err = h.UpdateDescription(set_id, *req.Description)
+			if err != nil {
+				er := NewErrorResponse(http.StatusInternalServerError, InternalError, fmt.Errorf("error updating description: %w", err))
+				er.LogAndWrite(w, r)
+				return
+			}
+			res.Description = new(string)
+			*res.Description = *req.Description
 		}
-		if update.Cards != nil {
-			// update/create cards
-			for _, u := range *update.Cards {
-				switch u.Type {
-				case "create":
-					if u.Front != nil && u.Back != nil {
-						_, err := h.cardHandler.CreateCard(set_id, *u.Front, *u.Back)
-						log.Printf("error creating card for %s: %v\n", clientIP, err)
-					}
-
-				case "update":
-					err := h.cardHandler.UpdateCard(u)
-					if err != nil {
-						log.Printf("error updating card for %s: %v\n", clientIP, err)
-					}
-
-				case "delete":
-					if u.ID != nil {
-						err := h.cardHandler.DeleteCard(*u.ID)
-						if err != nil {
-							log.Printf("error deleting card for %s: %v\n", clientIP, err)
-						}
-					}
+		// Create cards
+		if req.CardsCreated != nil {
+			for _, old := range *req.CardsCreated {
+				new, err := h.cardHandler.CreateCard(set_id, old.Front, old.Back)
+				if err != nil {
+					log.Printf("error creating card for %s: %v\n", clientIP, err)
 				}
+				createRes := CardCreateResponse{
+					OldID: old.ID,
+					NewID: new.ID,
+					Front: new.Front,
+					Back:  new.Back,
+				}
+				res.CardsCreated = &[]CardCreateResponse{}
+				*res.CardsCreated = append(*res.CardsCreated, createRes)
 			}
 		}
-		set, err := h.GetSetByID(set_id)
-		if err != nil {
-			log.Printf("error getting set for %s: %v\n", clientIP, err)
-			http.Error(w, "error getting set", http.StatusInternalServerError)
-			return
+		// Update cards
+		if req.CardsUpdated != nil {
+			for _, old := range *req.CardsUpdated {
+				new, err := h.cardHandler.UpdateCard(old)
+				if err != nil {
+					log.Printf("error updating card for %s: %v\n", clientIP, err)
+				}
+				updateRes := CardUpdateResponse{
+					ID:    new.ID,
+					Front: new.Front,
+					Back:  new.Back,
+				}
+				res.CardsUpdated = &[]CardUpdateResponse{}
+				*res.CardsUpdated = append(*res.CardsUpdated, updateRes)
+			}
 		}
-		cards, err := h.cardHandler.GetCardsBySetID(set_id)
-		if err != nil {
-			log.Printf("error getting set for %s: %v\n", clientIP, err)
-			http.Error(w, "error getting cards", http.StatusInternalServerError)
-			return
+		// Delete cards
+		if req.CardsDeleted != nil {
+			for _, old := range *req.CardsDeleted {
+				err := h.cardHandler.DeleteCard(old)
+				if err != nil {
+					log.Printf("error deleting card for %s: %v\n", clientIP, err)
+				}
+				res.CardsDeleted = &[]int{}
+				*res.CardsDeleted = append(*res.CardsDeleted, old)
+			}
 		}
-		set.Cards = cards
-		returnBytes, err := json.Marshal(set)
+
+		resBytes, err := json.Marshal(res)
 		if err != nil {
-			log.Printf("error marshalling json for %s: %v\n", clientIP, err)
-			http.Error(w, "error marshalling json", http.StatusInternalServerError)
-			return
+			er := NewErrorResponse(http.StatusInternalServerError, InternalError, nil)
+			er.LogAndWrite(w, r)
 		}
-		w.Write(returnBytes)
+		w.Write(resBytes)
 		return
 
 	// INSERT CARD ROUTE
