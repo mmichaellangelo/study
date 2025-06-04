@@ -11,26 +11,35 @@
 
     let {data} = $props()
 
+    /** Local copy of set */
     let setLocal = $state<Set|undefined>()
+    /** Most recent copy of the set as it exists on the server */
     let setRemote = $state<Set|undefined>(undefined)
+    /** If true, show loading spinner */
     let isLoading = $state(true)
+    /** Set true to prevent update() from running */
+    let isUpdating = $state(false)
 
+    /** Keeps track of sync status; true if setLocal === setRemote, otherwise false */
     let synced = $derived.by(() => {
         if (setLocal === undefined || setRemote === undefined) {
             return false
         }
-        if (setLocal.name != setRemote.name) {
+        // Not synced if names are not equal
+        if (setLocal.name !== setRemote.name) {
             return false
         }
-        if (setLocal.cards?.length != setRemote.cards?.length) {
+        // Not synced if don't have the same number of cards
+        if (setLocal.cards?.length !== setRemote.cards?.length) {
             return false
         }
         if (setLocal.cards && setRemote.cards) {
             const localCards = setLocal.cards
             const remoteCards = setRemote.cards
             for (let i = 0; i < localCards.length; i++) {
-                if (localCards[i].front != remoteCards[i].front ||
-                    localCards[i].back != remoteCards[i].back
+                // Check front and back of each card to ensure they are synced
+                if (localCards[i].front !== remoteCards[i].front ||
+                    localCards[i].back !== remoteCards[i].back
                 ) {
                     return false
                 }
@@ -39,26 +48,26 @@
         return true
     })
 
-    var blankCard: Card = {
-        id: -1,
-        set_id: -1,
-        created: new Date(),
-        front: "",
-        back: ""
-    }
-
     onMount(async () => {
+        // After set loaded, hide spinner
         isLoading = false
+        // If sets loaded, initialize setRemote and setLocal
         if (data.set) {
             setRemote = JSON.parse(JSON.stringify(data.set))
             setLocal = JSON.parse(JSON.stringify(data.set))
         }
     })
 
+    /** Index to keep track of new card element id's */
     let localNewCardIndex = $state(-1)
 
+    /**
+     * Adds a new card to local set, adds to update queue,
+     * focuses front input element of newly created card
+     */
     function addCard() {
         if (setLocal) {
+            // New Card object to add to setLocal
             const newCard: Card = {
                 id: localNewCardIndex,
                 front: "",
@@ -67,23 +76,32 @@
                 set_id: setLocal.id
             }
             if (setLocal.cards) {
+                // Add empty card to setLocal
                 setLocal.cards.push(newCard)
             cardsToUpdate.push(newCard.id)
             } else {
                 setLocal.cards = [newCard]
                 cardsToUpdate.push(newCard.id)
             }
-            // timeout pushes execution to after DOM is updated
+            // Timeout pushes execution to after DOM is updated
             setTimeout(() => {
+                // Focus and scroll to front input of newly created card
                 const newCardElement = document.querySelector(`#card_${newCard.id}`);
                 const frontInput = newCardElement?.querySelector<HTMLInputElement>(".front");
                 frontInput?.focus();
                 frontInput?.scrollIntoView()
             }, 0);
+            // Decrement localNewCardIndex so the next card created will have a unique index
             localNewCardIndex--
         }
     }
 
+    /**
+     * Returns a debounced function that can only run every (delay) ms
+     * @param func function to debounce
+     * @param delay debounce delay in ms
+     * @return debounced function
+     */
     function debounce(func: () => void, delay: number): () => void {
         let timeoutId: NodeJS.Timeout | null = null;
 
@@ -98,11 +116,18 @@
         };
     }
 
+    /** List of cards to create or update to be sent to API */
     let cardsToUpdate = $state<number[]>([])
+    /** List of cards to delete to be sent to API */
     let cardsToDelete = $state<number[]>([])
+    /** If true, updated name must be sent to API */
     let nameUpdate = $state(false)
 
-    // Local card has been modified >> add it to cardsToUpdate if needed
+    /**
+     * Handles card updates, adds to cardsToUpdate if the card has been
+     * changed from the copy in setRemote
+     * @param id id of local card to update
+     */
     function updateCard(id: number) {
         if (setLocal && setRemote && setLocal.cards && setRemote.cards) {
             if (!cardsToUpdate.includes(id)) {
@@ -127,9 +152,14 @@
         }
     }
 
+    /**
+     * Delete a card locally and add id to deletion queue 
+     * if it exists on the server
+     * @param id id of the card to delete
+     */
     function deleteCard(id: number) {
         if (setLocal && setRemote) {
-            // delete from local and cardsToUpdate
+            // Delete from local and cardsToUpdate
             cardsToUpdate = cardsToUpdate.filter(cardID => cardID !== id)
             setLocal.cards = setLocal?.cards?.filter(card => card.id !== id)
             if (setRemote?.cards?.find(card => card.id == id)) {
@@ -142,16 +172,28 @@
         
     }
 
+    /**
+     * Sets nameUpdate to true, signalling the system that 
+     * the new set name should be sent to the API
+     */
     function updateName() {
         nameUpdate = true
     }
 
+    /**
+     * Data structure for sending a card creation request
+     * to the API
+     */
     interface CardCreateRequest {
         id: number
         front: string
         back: string
     }
 
+    /**
+     * Data structure for a successful card creation response
+     * from the API
+     */
     interface CardCreateResponse {
         old_id: number
         new_id: number
@@ -159,18 +201,30 @@
         back: string
     }
 
+    /**
+     * Data structure for sending a card update request
+     * to the API
+     */
     interface CardUpdateRequest {
         id: number
         front?: string
         back?: string
     }
 
+    /**
+     * Data structure for a successful card update response
+     * from the API
+     */
     interface CardUpdateResponse {
         id: number
         front: string
         back: string
     }
 
+    /**
+     * Data structure for a set update request
+     * to the API
+     */
     interface SetUpdateRequest {
         name?: string
         description?: string
@@ -179,6 +233,10 @@
         cards_deleted?: number[]
     }
 
+    /**
+     * Data structure for a successful set update response
+     * from the API
+     */
     interface SetUpdateResponse {
         name?: string
         description?: string
@@ -193,6 +251,10 @@
      * updates id's of any newly created cards in setLocal
      */
     async function update() {
+        if (isUpdating) {
+            return
+        }
+        isUpdating = true
         if (!setLocal || !setRemote) {
             return
         }
@@ -322,30 +384,41 @@
                     }
                     
                 })
-                isLoading = false
             } catch (e) {
                 console.log(e)
+            } finally {
+                isUpdating = false
                 isLoading = false
             }
         }
+        isUpdating = false
+        isLoading = false
     }
 
+    /** Update function debounced to only run at quickest every 900 ms */
     const debouncedUpdate = debounce(update, 900)
 
+    /** On load, run debounced update function every second to keep the set data synced */
     onMount(() => {
         setInterval(debouncedUpdate, 1000)
     })
 
+    /** Dialog element for set deletion */
     let dialogElement = $state<HTMLDialogElement>()
 
+    /** Shows the set delete dialog */
     function showDialog() {
         dialogElement?.showModal()
     }
 
+    /** Closes the set delete dialog */
     function closeDialog() {
         dialogElement?.close()
     }
 
+    /**
+     * Sends API request to delete the set
+    */
     async function deleteSet() {
         try {
             const res = await fetch(`${API}/sets/${data.set?.id}`, {
