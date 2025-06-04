@@ -1,3 +1,6 @@
+<svelte:head>
+    <title>disco - {data.set?.name}</title>
+</svelte:head>
 <script lang="ts">
     import { goto } from '$app/navigation';
     import Loader from '$lib/components/Loader.svelte';

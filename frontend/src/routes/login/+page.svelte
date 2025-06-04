@@ -1,3 +1,7 @@
+<svelte:head>
+    <title>disco - login</title>
+</svelte:head>
+
 <script lang="ts">
     import { API } from "$lib/api";
     import Loader from "$lib/components/Loader.svelte";

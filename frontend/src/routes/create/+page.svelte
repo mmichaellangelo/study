@@ -1,3 +1,6 @@
+<svelte:head>
+    <title>disco - create</title>
+</svelte:head>
 <script lang="ts">
     import { goto } from "$app/navigation";
     import { API } from "$lib/api";

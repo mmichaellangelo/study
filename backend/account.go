@@ -44,9 +44,11 @@ var (
 )
 
 func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(claimsKey).(*AccountClaims)
 	url := r.URL.Path
 	switch {
-	// CREATE ACCOUNT
+
+	// CREATE ACCOUNT ROUTE
 	case AccountRE.MatchString(url) && r.Method == http.MethodPost:
 		err := r.ParseForm()
 		if err != nil {
@@ -65,11 +67,18 @@ func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		return
 
-	// GET ACCOUNT
+	// GET ACCOUNT ROUTE
 	case AccountREWithID.MatchString(url) && r.Method == http.MethodGet:
 		id, err := getAccountIDFromURL(url)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Currently you may only access your own account
+		// any other attempted access will return status unauthorized.
+		if claims.UserID != id {
+			er := NewErrorResponse(http.StatusUnauthorized, AccessNotAllowed, fmt.Errorf("account access unauthorized."))
+			er.LogAndWrite(w, r)
 			return
 		}
 		account, err := h.GetAccountByID(id)
@@ -82,6 +91,36 @@ func (h *AccountHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "error marshalling json", http.StatusInternalServerError)
 		}
 		w.Write(bytes)
+		return
+
+	// DELETE ACCOUNT ROUTE
+	case AccountREWithID.MatchString(url) && r.Method == http.MethodDelete:
+		// Check that password authentication has been provided and is valid,
+		// otherwise unauthorized
+		if r.Context().Value(passwordAuthKey).(int) == -1 {
+			er := NewErrorResponse(http.StatusUnauthorized, PasswordAuthRequired, nil)
+			er.LogAndWrite(w, r)
+			return
+		}
+		id, err := getAccountIDFromURL(url)
+		if err != nil {
+			er := NewErrorResponse(http.StatusBadRequest, IllegalArgument, err)
+			er.LogAndWrite(w, r)
+			return
+		}
+		if id != claims.UserID {
+			er := NewErrorResponse(http.StatusUnauthorized, AccessNotAllowed, fmt.Errorf("tried to delete someone else's account"))
+			er.LogAndWrite(w, r)
+			return
+		}
+		err = h.DeleteAccount(id)
+		if err != nil {
+			er := NewErrorResponse(http.StatusInternalServerError, InternalError, err)
+			er.LogAndWrite(w, r)
+			return
+		}
+		DeleteAuthCookies(w, r)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 }
@@ -105,21 +144,23 @@ func getAccountIDFromURL(url string) (int, error) {
 // CREATE
 
 /*
-Creates a new account
+Creates a new account.
 
-	Params:
-		email: email address
-		username: username
-		password: password unhashed
+Params:
 
-	Returns:
-		userID: id of newly created account or -1 if not successful
-		err:
-			BadRegistrationInfo if email, username, and/or password are empty or all whitespace
-			AccountWithEmailExists if an account with the given email already exists
-			AccountWithUsernameExists if an account with the given username already exists
-			BadEmail if email address cannot be parsed
-			InternalError error for an internal error
+	email: email address
+	username: username
+	password: password unhashed
+
+Returns:
+
+	userID: id of newly created account or -1 if not successful
+	err:
+		BadRegistrationInfo if email, username, and/or password are empty or all whitespace
+		AccountWithEmailExists if an account with the given email already exists
+		AccountWithUsernameExists if an account with the given username already exists
+		BadEmail if email address cannot be parsed
+		InternalError error for an internal error
 */
 func (h *AccountHandler) CreateAccount(email string, username string, password string) (account *Account, ae *AppError) {
 	// Check that email, username, and password are not blank
@@ -202,6 +243,7 @@ func (h *AccountHandler) GetAllAccounts() (*[]Account, error) {
 	return &accounts, nil
 }
 
+// Gets account corresponding to given id
 func (h *AccountHandler) GetAccountByID(id int) (*Account, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, email, username, picture, bio, created
@@ -224,6 +266,7 @@ func (h *AccountHandler) GetAccountByID(id int) (*Account, error) {
 	return &a, nil
 }
 
+// Gets account corresponding to given username
 func (h *AccountHandler) GetAccountByUsername(username string) (*Account, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, email, username, picture, bio, created
@@ -247,6 +290,7 @@ func (h *AccountHandler) GetAccountByUsername(username string) (*Account, error)
 	return &a, nil
 }
 
+// Gets account corresponding to given email
 func (h *AccountHandler) GetAccountByEmail(email string) (*Account, error) {
 	rows, err := h.db.Query(context.Background(),
 		`SELECT id, email, username, picture, bio, created
@@ -272,6 +316,7 @@ func (h *AccountHandler) GetAccountByEmail(email string) (*Account, error) {
 ////////////
 // UPDATE
 
+// Updates an account's email
 func (h *AccountHandler) UpdateEmail(id int, email string) error {
 	// Validate email
 	_, err := mail.ParseAddress(email)
@@ -296,6 +341,7 @@ func (h *AccountHandler) UpdateEmail(id int, email string) error {
 	return nil
 }
 
+// Updates an account's username
 func (h *AccountHandler) UpdateUsername(id int, username string) error {
 	// Check that user doesn't already exist with new username
 	acc, err := h.GetAccountByUsername(username)
@@ -315,6 +361,7 @@ func (h *AccountHandler) UpdateUsername(id int, username string) error {
 	return nil
 }
 
+// Updates an account's bio
 func (h *AccountHandler) UpdateBio(id int, bio string) error {
 	_, err := h.db.Exec(context.Background(),
 		`UPDATE accounts
@@ -325,6 +372,7 @@ func (h *AccountHandler) UpdateBio(id int, bio string) error {
 	return nil
 }
 
+// Updates an account's profile picture
 func (h *AccountHandler) UpdatePicture(id int, picture string) error {
 	_, err := h.db.Exec(context.Background(),
 		`UPDATE accounts
@@ -338,6 +386,7 @@ func (h *AccountHandler) UpdatePicture(id int, picture string) error {
 ////////////
 // DELETE
 
+// Deletes an account's profile picture
 func (h *AccountHandler) DeletePicture(id int) error {
 	_, err := h.db.Exec(context.Background(),
 		`UPDATE accounts
@@ -348,6 +397,7 @@ func (h *AccountHandler) DeletePicture(id int) error {
 	return nil
 }
 
+// Deletes an account permanently
 func (h *AccountHandler) DeleteAccount(id int) error {
 	// Check that account exists
 	acc, err := h.GetAccountByID(id)

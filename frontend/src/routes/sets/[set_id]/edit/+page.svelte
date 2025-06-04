@@ -1,3 +1,7 @@
+<svelte:head>
+    <title>disco - edit: {data.set?.name}</title>
+</svelte:head>
+
 <script lang="ts">
     import { goto, invalidate } from "$app/navigation";
     import { API } from "$lib/api.js";

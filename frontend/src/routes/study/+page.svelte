@@ -1,3 +1,7 @@
+<svelte:head>
+    <title>disco - study sets</title>
+</svelte:head>
+
 <script lang="ts">
     import { goto } from '$app/navigation';
 

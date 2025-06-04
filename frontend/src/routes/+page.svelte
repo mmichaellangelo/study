@@ -1,3 +1,6 @@
+<svelte:head>
+    <title>disco - join the study party!</title>
+</svelte:head>
 <script lang="ts">
     import { goto } from "$app/navigation";
     import { userState } from "$lib/state/account.svelte";

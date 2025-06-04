@@ -1,7 +1,11 @@
+<svelte:head>
+    <title>disco - register</title>
+</svelte:head>
+
 <script lang="ts">
     import { API } from "$lib/api";
     import Loader from "$lib/components/Loader.svelte";
-import StatusMessage from "$lib/components/StatusMessage.svelte";
+    import StatusMessage from "$lib/components/StatusMessage.svelte";
     import { GotoReload } from "$lib/functions/navigation";
     import type { StatusMessageData } from "$lib/types/types";
 

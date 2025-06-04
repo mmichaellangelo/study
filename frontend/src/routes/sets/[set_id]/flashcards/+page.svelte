@@ -1,3 +1,7 @@
+<svelte:head>
+    <title>disco - flashcards: {data.set?.name}</title>
+</svelte:head>
+
 <script lang="ts">
     import type { Card } from '$lib/types/types.js';
     import { onMount } from 'svelte';

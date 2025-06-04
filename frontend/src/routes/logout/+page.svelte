@@ -1,3 +1,7 @@
+<svelte:head>
+    <title>disco - logout</title>
+</svelte:head>
+
 <script lang="ts">
     import { API } from '$lib/api.js';
     import Loader from '$lib/components/Loader.svelte';

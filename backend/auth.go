@@ -18,10 +18,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Expiration for access token and cookie
 var accessTokenExpiration = (time.Minute * 5)
+
+// Expiration for refresh token and cookie
 var refreshTokenExpiration = (time.Hour * 24)
 
-// Middleware to handle user auth
+// Middleware struct to handle user auth
 type AuthMiddleware struct {
 	next           http.Handler
 	db             *pgxpool.Pool
@@ -44,6 +47,7 @@ type AuthDetails struct {
 	Password string
 }
 
+// Access and refresh tokens for user auth
 type AccessTokens struct {
 	Access  string `json:"access"`
 	Refresh string `json:"refresh"`
@@ -70,29 +74,49 @@ var (
 	LogoutPathRE    = regexp.MustCompile(`\/auth\/logout\/?$`)
 	RegisterPathRE  = regexp.MustCompile(`^\/auth\/register\/?$`)
 	IdentityRouteRE = regexp.MustCompile(`^\/auth\/me\/?$`)
-	RefreshRouteRE  = regexp.MustCompile(`^\/auth\/refresh\/?$`)
 )
 
+//////////////////
+// Context Keys
+
+// Custom context key type to keep compiler happy
 type contextKey string
 
+// Key for context containing client's IP address
 const clientIPKey contextKey = "clientIP"
+
+// Key for context containing client's jwt claims
 const claimsKey contextKey = "claims"
+
+// Key for context containing a boolean representing whether
+// client provided password authentication
+// for extra-restricted requests like account deletion
+const passwordAuthKey contextKey = "passwordAuth"
 
 // HTTP Routes
 func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Request URL path
 	url := r.URL.Path
 
 	ORIGIN := os.Getenv("ORIGIN")
 
+	// Only allow requests from origin specified in environment
 	w.Header().Set("Access-Control-Allow-Origin", ORIGIN)
+	// Allow HTTPOnly cookie headers
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	// Allow basic authorization header
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization")
+	// Allow all applicable methods
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 
+	// If X-Forwarded-For header present, use this as clientIP,
+	// otherwise use request's RemoteAddr field
 	clientIP := r.Header.Get("X-Forwarded-For")
 	if clientIP == "" {
 		clientIP = r.RemoteAddr
 	}
 
+	// Log client IP and add to request context
 	log.Printf("%s %s %s\n", clientIP, r.Method, url)
 	ctx := context.WithValue(r.Context(), clientIPKey, clientIP)
 	r = r.WithContext(ctx)
@@ -100,14 +124,17 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Handle OPTIONS preflight requests
 	if r.Method == http.MethodOptions {
 		fmt.Println("Handled OPTIONS request")
-		w.WriteHeader(http.StatusOK) // Just need to return OK status with CORS headers
+		// Just need to return OK status with CORS headers
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+	// Handle all other HTTP routes
 	switch {
 	// IDENTITY ROUTE
 	case IdentityRouteRE.MatchString(url) && r.Method == http.MethodGet:
 		log.Printf("Handled identity route for %s\n", clientIP)
+		// Refresh access token if needed, get most up-to-date claims
 		claims, ae := h.RefreshAccess(w, r)
 		if ae != nil {
 			er := NewErrorResponse(http.StatusUnauthorized, ae.Code, ae.Err)
@@ -120,6 +147,7 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			er.LogAndWrite(w, r)
 			return
 		}
+		// Send back unmarshalled claims to client
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 		return
@@ -151,13 +179,14 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			case ae.Code == BadRegistrationInfo:
 				er := NewErrorResponse(http.StatusBadRequest, ae.Code, ae.Err)
 				er.LogAndWrite(w, r)
+				return
 			case ae.Code == AccountWithEmailExists || ae.Code == AccountWithUsernameExists:
 				er := NewErrorResponse(http.StatusForbidden, ae.Code, ae.Err)
 				er.LogAndWrite(w, r)
 				return
 			}
 		}
-		// Login
+		// Login if registration is successful
 		ae = h.Login(email, password, w)
 		if ae != nil {
 			er := NewErrorResponse(http.StatusUnauthorized, ae.Code, ae.Err)
@@ -219,40 +248,44 @@ func (h *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			er.LogAndWrite(w, r)
 			return
 		}
-		ctx := context.WithValue(r.Context(), claimsKey, claims)
-		r = r.WithContext(ctx)
+		// Set context for password auth, required for account deletion
+		// Sets to -1 if not provided or not authorized
+		basicAuthUserID, err := h.ValidateBasicAuth(r)
+		if err != nil {
+			passwordAuthContext := context.WithValue(r.Context(), passwordAuthKey, -1)
+			r = r.WithContext(passwordAuthContext)
+		} else {
+			passwordAuthContext := context.WithValue(r.Context(), passwordAuthKey, basicAuthUserID)
+			r = r.WithContext(passwordAuthContext)
+		}
+		// Set claims context, required for user auth
+		claimsContext := context.WithValue(r.Context(), claimsKey, claims)
+		r = r.WithContext(claimsContext)
 		h.next.ServeHTTP(w, r)
 		return
 	}
+}
 
+// Returns userID of password authorized user
+// if basic auth is provided with request and
+// credentials are correct.
+func (h *AuthMiddleware) ValidateBasicAuth(r *http.Request) (userID int, err error) {
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return 0, fmt.Errorf("basic auth not provided")
+	}
+	authDetails, ae := h.Authenticate(username, password)
+	if ae != nil {
+		return 0, ae
+	}
+	return authDetails.UserID, nil
 }
 
 // Validates login credentials, stores refresh and sets cookies
 func (h *AuthMiddleware) Login(emailOrUsername string, password string, w http.ResponseWriter) *AppError {
-	if strings.TrimSpace(emailOrUsername) == "" || strings.TrimSpace(password) == "" {
-		return NewAppError(IllegalArgument, "email or username is blank")
-	}
-	// Distinguish username/email
-	_, errParseAddress := mail.ParseAddress(emailOrUsername)
-	var errGetAccount error
-	var authDetails *AuthDetails
-	// Get password hash from db
-	if errParseAddress != nil {
-		// Username
-		authDetails, errGetAccount = h.GetAuthDetailsByUsername(emailOrUsername)
-	} else {
-		// Email
-		authDetails, errGetAccount = h.GetAuthDetailsByEmail(emailOrUsername)
-	}
-	if errGetAccount != nil {
-		return NewAppError(NotFound, errGetAccount)
-	}
-	if authDetails == nil {
-		return NewAppError(NotFound, "account not found")
-	}
-	// Authenticate
-	if !VerifyPassword(password, authDetails.Password) {
-		return NewAppError(PasswordIncorrect, nil)
+	authDetails, ae := h.Authenticate(emailOrUsername, password)
+	if ae != nil {
+		return ae
 	}
 	refresh, ae := h.GenerateRefreshCookieAndStore(authDetails.UserID, authDetails.Username)
 	if ae != nil {
@@ -267,14 +300,34 @@ func (h *AuthMiddleware) Login(emailOrUsername string, password string, w http.R
 	return nil
 }
 
-// Deletes refresh from db, sends cookie deletion request
-func (h *AuthMiddleware) Logout(refresh string, w http.ResponseWriter, r *http.Request) *AppError {
-	ae := h.DeleteRefreshFromDB(refresh)
-	if ae != nil {
-		return ae
+// Validates an email/username and password, returning auth details and nil error if successful
+func (h *AuthMiddleware) Authenticate(emailOrUsername string, password string) (*AuthDetails, *AppError) {
+	if strings.TrimSpace(emailOrUsername) == "" || strings.TrimSpace(password) == "" {
+		return nil, NewAppError(IllegalArgument, "email or username is blank")
 	}
-	h.DeleteAuthCookies(w, r)
-	return nil
+	// Distinguish username/email
+	_, errParseAddress := mail.ParseAddress(emailOrUsername)
+	var errGetAccount error
+	var authDetails *AuthDetails
+	// Get password hash from db
+	if errParseAddress != nil {
+		// Username
+		authDetails, errGetAccount = h.GetAuthDetailsByUsername(emailOrUsername)
+	} else {
+		// Email
+		authDetails, errGetAccount = h.GetAuthDetailsByEmail(emailOrUsername)
+	}
+	if errGetAccount != nil {
+		return nil, NewAppError(NotFound, errGetAccount)
+	}
+	if authDetails == nil {
+		return nil, NewAppError(NotFound, "account not found")
+	}
+	// Authenticate
+	if !VerifyPassword(password, authDetails.Password) {
+		return nil, NewAppError(PasswordIncorrect, nil)
+	}
+	return authDetails, nil
 }
 
 // Given username, returns auth details (userID and password)
@@ -315,6 +368,16 @@ func (h *AuthMiddleware) GetAuthDetailsByEmail(email string) (*AuthDetails, erro
 		return nil, err
 	}
 	return &a, nil
+}
+
+// Deletes refresh from db, sends cookie deletion request
+func (h *AuthMiddleware) Logout(refresh string, w http.ResponseWriter, r *http.Request) *AppError {
+	ae := h.DeleteRefreshFromDB(refresh)
+	if ae != nil {
+		return ae
+	}
+	DeleteAuthCookies(w, r)
+	return nil
 }
 
 // Generates access token in the form of a cookie
@@ -538,7 +601,7 @@ func (h *AuthMiddleware) DeleteRefreshFromDB(token string) *AppError {
 	return nil
 }
 
-func (h *AuthMiddleware) DeleteAuthCookies(w http.ResponseWriter, r *http.Request) {
+func DeleteAuthCookies(w http.ResponseWriter, r *http.Request) {
 	clientIP := r.Context().Value(clientIPKey).(string)
 	log.Printf("sending auth cookie delete request to %s\n", clientIP)
 	access := http.Cookie{

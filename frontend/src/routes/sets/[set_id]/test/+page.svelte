@@ -1,3 +1,6 @@
+<svelte:head>
+    <title>disco - test: {data.set?.name}</title>
+</svelte:head>
 <script lang="ts">
 
     let {data} = $props()
